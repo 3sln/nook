@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Nook — a little space for the extras</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@3sln/ngin/queries": "/nook/node_modules/@3sln/ngin/src/queries.js",
+        "@3sln/ngin/providers": "/nook/node_modules/@3sln/ngin/src/providers.js"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      color-scheme: light dark;
+      color: light-dark(#302b43, #eee8fa);
+      background: light-dark(#f8f7fb, #1c1924);
+      font-synthesis: none;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+    }
+    nav {
+      height: 96px;
+      max-width: 1200px;
+      margin: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+    }
+    .brand {
+      font-size: 24px;
+      letter-spacing: -1px;
+      font-weight: 750;
+    }
+    .brand span {
+      color: #7963e4;
+    }
+    nav a {
+      font-size: 12px;
+      color: #726c85;
+      text-decoration: none;
+      margin-left: 24px;
+    }
+    .pill {
+      border: 1px solid #e1ddeb;
+      border-radius: 30px;
+      padding: 8px 14px;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+      color: #75638e;
+    }
+    main {
+      max-width: 1120px;
+      margin: 40px auto 0;
+      padding: 0 40px;
+    }
+    .eyebrow {
+      font-size: 10px;
+      letter-spacing: 2.5px;
+      color: #8a7ba8;
+      font-weight: 600;
+    }
+    h1 {
+      font-size: clamp(40px, 6vw, 72px);
+      line-height: 1.07;
+      letter-spacing: -3.5px;
+      font-weight: 550;
+      max-width: 750px;
+      margin: 22px 0;
+    }
+    h1 em {
+      font-style: normal;
+      color: #8972d7;
+    }
+    .intro {
+      font-size: 16px;
+      line-height: 1.8;
+      color: #898298;
+      max-width: 480px;
+    }
+    .hint {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin: 24px 0 40px;
+      font-size: 11px;
+      color: #878092;
+    }
+    kbd {
+      border: 1px solid #ddd8e7;
+      background: white;
+      padding: 6px 9px;
+      border-radius: 6px;
+      font-family: inherit;
+      color: #756a87;
+    }
+    .touch-hint {
+      display: none;
+    }
+    @media (pointer: coarse), (hover: none) {
+      .keyboard-hint {
+        display: none;
+      }
+      .touch-hint {
+        display: inline;
+      }
+    }
+    .workspace {
+      border: 1px solid #e6e1ed;
+      border-radius: 14px;
+      background: white;
+      box-shadow: 0 12px 55px #5d467608;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      min-height: 310px;
+    }
+    .sidebar {
+      padding: 24px;
+      border-right: 1px solid #f0edf4;
+      font-size: 12px;
+      color: #a49bad;
+    }
+    .sidebar strong {
+      display: block;
+      color: #51465e;
+      margin-bottom: 24px;
+    }
+    .sidebar p {
+      padding: 9px 12px;
+    }
+    .sidebar .selected {
+      background: #f2eefb;
+      color: #8970c7;
+      border-radius: 8px;
+    }
+    .document {
+      padding: 32px 40px;
+    }
+    .doc-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #aea4bb;
+    }
+    .document h2 {
+      font-size: 25px;
+      font-weight: 550;
+      letter-spacing: -0.8px;
+      margin: 28px 0 10px;
+    }
+    .document p {
+      font-size: 12px;
+      line-height: 1.9;
+      color: #a197ac;
+      max-width: 450px;
+    }
+    .line {
+      height: 7px;
+      background: #f2eff6;
+      border-radius: 10px;
+      margin: 13px 0;
+      max-width: 450px;
+    }
+    .line.short {
+      max-width: 300px;
+    }
+    .demo-tools {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      font-size: 11px;
+      color: #9b91a7;
+      padding: 22px 0;
+    }
+    .demo-tools button {
+      background: white;
+      border: 1px solid #ded7e9;
+      color: #7a6b92;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .corner-note {
+      position: fixed;
+      bottom: 26px;
+      right: 80px;
+      color: #92839f;
+      font-size: 11px;
+    }
+    .corner-note span {
+      font-size: 20px;
+      margin-left: 10px;
+    }
+    footer {
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      color: #b1a6bc;
+      margin: 40px 0;
+    }
+    body.dark {
+      background: #1c1924;
+      color: #eee8fa;
+    }
+    .dark .workspace,
+    .dark kbd,
+    .dark .demo-tools button {
+      background: #282330;
+      color: #d5c9e5;
+      border-color: #3c3448;
+    }
+    .dark .sidebar {
+      border-color: #3c3448;
+    }
+    .dark .line {
+      background: #3c3448;
+    }
+    @media (max-width: 650px) {
+      nav {
+        padding: 0 24px;
+        height: 75px;
+      }
+      nav a {
+        display: none;
+      }
+      main {
+        margin-top: 35px;
+        padding: 0 24px;
+      }
+      h1 {
+        letter-spacing: -2px;
+      }
+      .sidebar {
+        display: none;
+      }
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .document {
+        padding: 24px;
+      }
+      .hint {
+        margin-bottom: 30px;
+      }
+      .demo-tools {
+        align-items: start;
+      }
+      .corner-note {
+        display: none;
+      }
+    }
+  </style>
+  <nav>
+    <div class="brand">nook</div>
+    <div>
+      <a href="https://github.com/3sln/stack">Built the 3sln way</a
+      ><span class="pill">WEB COMPONENTS · 0.1</span>
+    </div>
+  </nav>
+  <main>
+    <div class="eyebrow">A QUIETER KIND OF INTERFACE</div>
+    <h1>Everything extra.<br /><em>Right in your corner.</em></h1>
+    <p class="intro">
+      Give the useful little things a place of their own.<br />Always within
+      reach. Never in the way.
+    </p>
+    <div class="hint">
+      <span class="keyboard-hint"
+        ><kbd>Shift</kbd> + <kbd>?</kbd> to open Nook</span
+      >
+      <span class="touch-hint">Tap the corner to open. Hold to move.</span>
+    </div>
+    <section class="workspace">
+      <aside class="sidebar">
+        <strong>◈ &nbsp; Studio notes</strong>
+        <p class="selected">Overview</p>
+        <p>Working notes</p>
+        <p>Resources</p>
+      </aside>
+      <article class="document">
+        <div class="doc-top">
+          <span>WORKSPACE &nbsp; / &nbsp; OVERVIEW</span
+          ><span>All changes saved &nbsp; ◦</span>
+        </div>
+        <h2>A little room to think.</h2>
+        <p>
+          This is your app. Your content, your flow, your space.<br />Nook keeps
+          the supporting cast quietly close by.
+        </p>
+        <div class="line"></div>
+        <div class="line"></div>
+        <div class="line short"></div>
+      </article>
+    </section>
+    <div class="demo-tools">
+      <span
+        >Explore Resources → Guides or Export.<br />Try adding an item while the
+        menu is open.</span
+      ><button id="dynamic">＋ Add contextual action</button>
+    </div>
+    <footer>
+      SMALL SURFACE. OPEN POSSIBILITIES. &nbsp; / &nbsp; @3SLN/NOOK
+    </footer>
+  </main>
+  <div class="corner-note">Your extras live here <span>↘</span></div>
+  <nook-dock id="dock">
+    <nook-menu root label="Resources">
+      <template slot="icon"
+        ><svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <use href="#nook-icon-folder"></use></svg
+      ></template>
+      <nook-menu label="Guides">
+        <template slot="icon"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <use href="#nook-icon-guide"></use></svg
+        ></template>
+        <nook-panel label="Page guide">
+          <template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-file"></use></svg
+          ></template>
+          <template slot="content">
+            <p>
+              You're in the studio overview. Keep project notes, working drafts,
+              and useful links together here.
+            </p>
+            <p>
+              This guide lives inside Resources → Guides. Use the back arrow to
+              return one level at a time.
+            </p>
+          </template>
+        </nook-panel>
+        <nook-menu label="Writing tips">
+          <template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-edit"></use></svg
+          ></template>
+          <nook-panel label="Getting started">
+            <template slot="icon"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#nook-icon-plus"></use></svg
+            ></template>
+            <template slot="content">
+              <p>
+                Start with a title and one thought. Add structure when you need
+                it.
+              </p>
+              <p>
+                This panel is three menus deep. Each level stays mounted as you
+                navigate.
+              </p>
+            </template>
+          </nook-panel>
+          <nook-panel label="Working together">
+            <template slot="icon"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#nook-icon-people"></use></svg
+            ></template>
+            <template slot="content">
+              <p>
+                Leave a little context with each note: what changed, why it
+                matters, and what comes next.
+              </p>
+              <label
+                >A note to come back to<textarea
+                  rows="3"
+                  placeholder="Try typing, going back, and reopening…"
+                ></textarea>
+              </label>
+            </template>
+          </nook-panel>
+        </nook-menu>
+      </nook-menu>
+      <nook-menu label="Export">
+        <template slot="icon"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <use href="#nook-icon-download"></use></svg
+        ></template>
+        <nook-action id="export-pdf" label="PDF"
+          ><template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-file"></use></svg></template
+        ></nook-action>
+        <nook-action id="export-markdown" label="Markdown"
+          ><template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-text"></use></svg></template
+        ></nook-action>
+        <nook-action id="export-text" label="Plain text"
+          ><template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-file"></use></svg></template
+        ></nook-action>
+        <nook-action id="export-html" label="HTML"
+          ><template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-code"></use></svg></template
+        ></nook-action>
+        <nook-action id="export-json" label="JSON"
+          ><template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-code"></use></svg></template
+        ></nook-action>
+        <nook-action id="export-archive" label="Archive"
+          ><template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-archive"></use></svg></template
+        ></nook-action>
+        <nook-menu label="More formats">
+          <template slot="icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#nook-icon-more"></use></svg
+          ></template>
+          <nook-action id="export-csv" label="CSV"
+            ><template slot="icon"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#nook-icon-table"></use></svg></template
+          ></nook-action>
+          <nook-action id="export-rtf" label="Rich text"
+            ><template slot="icon"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#nook-icon-text"></use></svg></template
+          ></nook-action>
+        </nook-menu>
+      </nook-menu>
+      <nook-panel label="About Nook">
+        <template slot="icon"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <use href="#nook-icon-info"></use></svg
+        ></template>
+        <template slot="content">
+          <p>
+            A small corner for the useful extras. Reusable custom elements,
+            persistent views, and context supplied by your app.
+          </p>
+          <p>
+            Guides shows compact nested menus. Export has six sample actions so
+            you can compare the expanded layout; they announce their selection
+            without creating files.
+          </p>
+        </template>
+      </nook-panel>
+    </nook-menu>
+    <nook-action id="copy" label="Copy link" keybind="Alt+C">
+      <template slot="icon"
+        ><svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <use href="#nook-icon-link"></use></svg
+      ></template>
+    </nook-action>
+    <nook-command
+      id="new-note"
+      name="Create a note"
+      description="Start a new note with a title and optional priority."
+      keybind="Alt+N"
+    >
+      <nook-arg
+        name="title"
+        label="Note title"
+        placeholder="A new idea"
+        required
+      ></nook-arg>
+      <nook-arg name="priority" label="Priority" type="select" value="normal"
+        ><option value="normal">Normal</option>
+        <option value="high">High</option></nook-arg
+      >
+    </nook-command>
+    <nook-command
+      id="set-accent"
+      name="Change accent"
+      description="Choose a new accent color for Nook."
+      keybind="Alt+Shift+A"
+    >
+      <nook-arg
+        name="color"
+        label="Accent color"
+        type="color"
+        value="#7560e8"
+      ></nook-arg>
+    </nook-command>
+    <nook-command
+      id="toggle-dark"
+      name="Toggle dark mode"
+      description="Switch between the light and dark themes."
+      keybind="Alt+Shift+D"
+    ></nook-command>
+    <nook-command
+      id="go-guide"
+      name="Open page guide"
+      description="Read the contextual guide for this workspace."
+    ></nook-command>
+    <nook-setting
+      id="theme"
+      label="Dark mode"
+      description="A softer space after hours"
+      type="toggle"
+      value="false"
+    ></nook-setting>
+    <nook-setting
+      label="Text size"
+      type="range"
+      min="12"
+      max="20"
+      value="14"
+      id="size"
+    ></nook-setting>
+    <nook-setting label="Accent" type="enum" value="#7560e8" id="accent">
+      <nook-option
+        value="#7560e8"
+        label="Iris"
+        description="Soft violet, Nook's original accent"
+        ><template slot="icon"
+          ><span
+            style="
+              display: block;
+              width: 20px;
+              height: 20px;
+              border-radius: 50%;
+              background: #7560e8;
+            "
+          ></span></template
+      ></nook-option>
+      <nook-option
+        value="#36877d"
+        label="Sage"
+        description="Quiet green for a calmer workspace"
+        ><template slot="icon"
+          ><span
+            style="
+              display: block;
+              width: 20px;
+              height: 20px;
+              border-radius: 50%;
+              background: #36877d;
+            "
+          ></span></template
+      ></nook-option>
+      <nook-option
+        value="#bc6a54"
+        label="Clay"
+        description="Warm terracotta with a little character"
+        ><template slot="icon"
+          ><span
+            style="
+              display: block;
+              width: 20px;
+              height: 20px;
+              border-radius: 50%;
+              background: #bc6a54;
+            "
+          ></span></template
+      ></nook-option>
+    </nook-setting>
+  </nook-dock>
+  <script type="module">
+    import "/nook/src/index.js";
+    import { captureTabScreenshot } from "/nook/src/capture.js";
+    const dock = document.querySelector("#dock");
+    dock.context = { page: location.href, workspace: "Studio notes" };
+    dock.feedback = {
+      submit: async (report) => {
+        dock.lastFeedback = report;
+      },
+      attachFiles: async (files) => files,
+      captureScreenshot: navigator.mediaDevices?.getDisplayMedia
+        ? (options) => captureTabScreenshot(options)
+        : undefined,
+      successMessage: "Saved in this demo only. No data was sent.",
+    };
+    const scheme = matchMedia("(prefers-color-scheme: dark)");
+    let chosenTheme = false;
+    function applyTheme(dark) {
+      document.body.classList.toggle("dark", dark);
+      document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      dock.style.colorScheme = dark ? "dark" : "light";
+      dock.querySelector("#theme").value = dark;
+    }
+    applyTheme(scheme.matches);
+    scheme.addEventListener("change", (event) => {
+      if (!chosenTheme) applyTheme(event.matches);
+    });
+    dock.addEventListener("nook-change", (e) => {
+      const { source, value } = e.detail;
+      if (source.id === "theme") {
+        chosenTheme = true;
+        applyTheme(value);
+      }
+      if (source.id === "size")
+        dock.style.setProperty("--nook-font", `${value}px system-ui`);
+      if (source.id === "accent")
+        dock.style.setProperty("--nook-accent", value);
+    });
+    dock.addEventListener("nook-action", async (e) => {
+      if (e.detail.id === "copy") {
+        try {
+          await navigator.clipboard.writeText(location.href);
+          dock.live.textContent = "Link copied.";
+        } catch {
+          dock.live.textContent = "Clipboard is unavailable.";
+        }
+      } else
+        dock.live.textContent = `${e.detail.source.getAttribute("label")} selected.`;
+    });
+    dock.addEventListener("nook-command", (event) => {
+      const { id, args } = event.detail;
+      if (id === "toggle-dark") {
+        const setting = dock.querySelector("#theme");
+        chosenTheme = true;
+        applyTheme(!setting.value);
+      }
+      if (id === "set-accent") {
+        dock.style.setProperty("--nook-accent", args.color);
+        const accent = dock.querySelector("#accent");
+        for (const option of accent.querySelectorAll("[data-custom]"))
+          option.remove();
+        if (
+          ![...accent.querySelectorAll("option,nook-option")].some(
+            (option) => option.getAttribute("value") === args.color,
+          )
+        ) {
+          const option = document.createElement("nook-option");
+          option.setAttribute("value", args.color);
+          option.setAttribute("label", "Custom");
+          option.dataset.custom = "true";
+          accent.append(option);
+        }
+        accent.value = args.color;
+      }
+      if (id === "new-note") {
+        document.querySelector(".document h2").textContent = args.title;
+        dock.live.textContent = `Created ${args.title}, ${args.priority} priority.`;
+      }
+      if (id === "go-guide") {
+        event.preventDefault();
+        dock.open(
+          [...dock.querySelectorAll("nook-panel")].find(
+            (item) => item.getAttribute("label") === "Page guide",
+          ),
+        );
+      }
+    });
+    let extra;
+    document.querySelector("#dynamic").onclick = (e) => {
+      if (extra) {
+        extra.remove();
+        extra = null;
+        e.target.textContent = "＋ Add contextual action";
+      } else {
+        extra = document.createElement("nook-action");
+        extra.setAttribute("label", "Save page");
+        extra.setAttribute("keybind", "Alt+S");
+        dock.append(extra);
+        e.target.textContent = "− Remove contextual action";
+      }
+    };
+  </script>
+</html>

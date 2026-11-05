@@ -1,0 +1,52 @@
+name: Release
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: npm-release
+  queue: max
+jobs:
+  version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - id: version
+        run: node scripts/release.mjs detect
+        env:
+          BEFORE: ${{ github.event.before }}
+  checks:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: [version, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: node scripts/release.mjs publish
+        env:
+          GH_TOKEN: ${{ github.token }}
