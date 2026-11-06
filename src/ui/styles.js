@@ -13,10 +13,10 @@ export default `
   --nook-border: light-dark(#e9e7ef, #484151);
   --nook-material-background: color-mix(
     in srgb,
-    var(--nook-surface) 64%,
+    var(--nook-surface) 41%,
     transparent
   );
-  --nook-material-blur: 12px;
+  --nook-material-blur: 7.5px;
   --nook-radius: 16px;
   --nook-shadow:
     0 8px 32px light-dark(#241a4918, #00000048),
