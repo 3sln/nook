@@ -29,6 +29,7 @@ export function onboardingResource({ storage, owner }) {
     storage,
     hasSeen: () => resource.hasSeen(),
   });
+  resource.acknowledgeAttention = () => page.attention?.acknowledge();
   resource.subscribeAttention = (listener) =>
     page.attention.subscribe(listener);
   return resource;

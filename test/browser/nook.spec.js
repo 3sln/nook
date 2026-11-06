@@ -18,7 +18,7 @@ test("tap, nested navigation, and panel drafts preserve DOM identity", async ({
   await page.evaluate(() => {
     window.originalInput = document
       .querySelector("nook-dock")
-      .shadowRoot.querySelector("[part=feedback-message]");
+      .shadowRoot.querySelector("[part~=feedback-message]");
   });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Open Nook menu" }).click();
@@ -32,7 +32,7 @@ test("tap, nested navigation, and panel drafts preserve DOM identity", async ({
         window.originalInput ===
         document
           .querySelector("nook-dock")
-          .shadowRoot.querySelector("[part=feedback-message]"),
+          .shadowRoot.querySelector("[part~=feedback-message]"),
     ),
   ).toBe(true);
 });
@@ -91,9 +91,13 @@ test("separate shortcuts and Escape navigation", async ({ page, isMobile }) => {
     await expect(
       page
         .getByRole("button", { name: "Feedback", exact: true })
-        .locator("[part=number]"),
+        .locator("[part~=number]"),
     ).toBeVisible();
-    await page.keyboard.press("1");
+    const number = await page
+      .getByRole("button", { name: "Feedback", exact: true })
+      .locator("[part~=number]")
+      .textContent();
+    await page.keyboard.press(`Digit${number}`);
     await page.keyboard.up("Alt");
   } else
     await page.getByRole("button", { name: "Feedback", exact: true }).click();
@@ -114,7 +118,7 @@ test("swipes open their surfaces and a long press moves the handle", async ({
   await page.mouse.down();
   await page.mouse.move(x - 90, y);
   await page.mouse.up();
-  await expect(page.getByRole("dialog", { name: "All actions" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Full menu" })).toBeVisible();
   await page.evaluate(() => document.querySelector("nook-dock").close());
   await page.mouse.move(x, y);
   await page.mouse.down();
@@ -128,7 +132,7 @@ test("swipes open their surfaces and a long press moves the handle", async ({
   await page.mouse.down();
   await page.mouse.move(x - 90, y - 90);
   await page.mouse.up();
-  await expect(page.getByRole("dialog", { name: "All actions" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Full menu" })).toBeVisible();
   await page.evaluate(() => document.querySelector("nook-dock").close());
   await page.mouse.move(x, y);
   await page.mouse.down();
@@ -143,7 +147,7 @@ test("root and help show instructions appropriate to the input device", async ({
   isMobile,
 }) => {
   const handle = page.getByRole("button", { name: "Open Nook menu" });
-  const tooltip = page.locator("nook-dock").locator("[part=handle-tooltip]");
+  const tooltip = page.locator("nook-dock").locator("[part~=handle-tooltip]");
   if (!isMobile) {
     await handle.hover();
     await expect(tooltip).toBeVisible();
@@ -165,8 +169,12 @@ test("root and help show instructions appropriate to the input device", async ({
   await page
     .locator("nook-dock")
     .evaluate((node) => node.open(node.querySelector("#keyboard-guide")));
-  const touch = page.getByText("Tap to open. Swipe sideways", { exact: false });
-  const keyboard = page.getByText("Use arrow keys to move", { exact: false });
+  const help = page.getByRole("dialog", {
+    name: "How Nook works",
+    exact: true,
+  });
+  const touch = help.getByText("Tap to open. Swipe sideways", { exact: false });
+  const keyboard = help.getByText("Use arrow keys to move", { exact: false });
   if (isMobile) {
     await expect(touch).toBeVisible();
     await expect(keyboard).toBeHidden();
@@ -202,7 +210,7 @@ test("compact menus float and expanded mobile views fill the viewport", async ({
   await expect(root).toHaveAttribute("data-presentation", "compact");
   await expect(
     root.getByRole("button", { name: "More", exact: true }),
-  ).toBeVisible();
+  ).toBeHidden();
   await page.evaluate(() =>
     document
       .querySelector("nook-dock")
@@ -238,7 +246,7 @@ test("expanded descendants remain fullscreen and nested menus become sections", 
 }) => {
   await page.evaluate(() => {
     const dock = document.querySelector("nook-dock");
-    const menu = dock.querySelector("nook-menu[root]");
+    const menu = dock.querySelector('nook-menu[label="Resources"]');
     menu.setAttribute("presentation", "expanded");
     dock.open(menu);
   });
@@ -338,32 +346,24 @@ test("Alt/Option badges are transient and plain number keys do not activate", as
     page.getByRole("dialog", { name: "Nook", exact: true }),
   ).toBeVisible();
   const feedback = page.getByRole("button", { name: "Feedback", exact: true });
-  const label = feedback.locator("[part=item-label]");
-  await expect(label).toBeHidden();
-  const tooltip = feedback.locator("[part=tooltip]");
+  const label = feedback.locator("[part~=item-label]");
+  await expect(label).toBeVisible();
+  const tooltip = feedback.locator("[part~=tooltip]");
   await feedback.hover();
   await expect(tooltip).toHaveCSS("opacity", "1");
+  await expect(label).toBeHidden();
   await page.keyboard.down("Alt");
   await expect(tooltip).toBeHidden();
   const badge = page
     .getByRole("button", { name: "Feedback", exact: true })
-    .locator("[part=number]");
-  await expect(badge).toHaveText("1");
+    .locator("[part~=number]");
+  await expect(badge).toHaveText("2");
   await expect(badge).toBeVisible();
   await expect(label).toBeVisible();
   await expect(label).toHaveText("Feedback");
-  await expect(badge).toHaveCSS("position", "static");
-  const badgeBounds = await badge.boundingBox();
-  const labelBounds = await label.boundingBox();
-  expect(
-    Math.abs(
-      badgeBounds.y +
-        badgeBounds.height / 2 -
-        labelBounds.y -
-        labelBounds.height / 2,
-    ),
-  ).toBeLessThan(2);
-  expect(badgeBounds.x + badgeBounds.width).toBeLessThan(labelBounds.x);
+  await expect(badge).toHaveCSS("position", "absolute");
+  const iconBounds = await feedback.boundingBox();
+  expect(iconBounds.width).toBeCloseTo(56, 0);
   await page.keyboard.up("Alt");
   await expect(badge).toBeHidden();
   await expect(label).toBeHidden();
@@ -389,10 +389,17 @@ test("Alt/Option badges are transient and plain number keys do not activate", as
           .style.setProperty("--nook-overflow-width", width),
       width,
     );
+    await overflow.evaluate(async (element) => {
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished.catch(() => {})),
+      );
+    });
     const before = await overflow.boundingBox();
     await page.keyboard.down("Alt");
     await expect(
-      overflow.locator("[part=number]").filter({ visible: true }).first(),
+      overflow.locator("[part~=number]").filter({ visible: true }).first(),
     ).toBeVisible();
     await expect
       .poll(async () =>
@@ -422,27 +429,41 @@ test("first visit offers the device guide once and retains real sprite reference
   page,
   isMobile,
 }) => {
-  const handle = page.locator("nook-dock").locator("[part=handle]");
+  const handle = page.locator("nook-dock").locator("[part~=handle]");
   await expect(handle).toHaveClass(/inviting/);
   await handle.click();
+  const root = page.getByRole("dialog", { name: "Nook", exact: true });
+  await expect(root).toBeVisible();
+  const guide = root.getByRole("button", { name: "Quick tour", exact: true });
+  await expect(guide.locator("[part~=tutorial-badge]")).toBeVisible();
+  expect(
+    await page.evaluate(() => localStorage.getItem("@3sln/nook:tutorial:v1")),
+  ).toBeNull();
+  await guide.click();
   const welcome = page.getByRole("dialog", {
-    name: "Welcome to Nook",
+    name: "Quick tour",
     exact: true,
   });
   await expect(welcome).toBeVisible();
   await expect(handle).not.toHaveClass(/inviting/);
   if (isMobile)
     await expect(
-      welcome.getByText("When available, swipe sideways", { exact: false }),
+      welcome.getByText("Tap to open. Swipe sideways", { exact: false }),
     ).toBeVisible();
   else
     await expect(
-      welcome.getByText("Use arrows to move", { exact: false }),
+      welcome.getByText("Arrows move; Enter selects.", { exact: false }),
     ).toBeVisible();
   expect(
     await page.evaluate(() => localStorage.getItem("@3sln/nook:tutorial:v1")),
-  ).toBe("seen");
+  ).toBe(null);
   await page.getByRole("button", { name: "Got it", exact: true }).click();
+  expect(
+    await page.evaluate(() => localStorage.getItem("@3sln/nook:tutorial:v1")),
+  ).toBe("seen");
+  await expect(
+    page.getByRole("button", { name: "Quick tour", exact: true }),
+  ).toBeHidden();
   await expect(
     page.getByRole("dialog", { name: "Nook", exact: true }),
   ).toBeVisible();
@@ -489,7 +510,7 @@ test("corner orientation, anchored drag preview, and readable floating text cont
     () =>
       !document
         .querySelector("nook-dock")
-        .shadowRoot.querySelector("[part=handle]")
+        .shadowRoot.querySelector("[part~=handle]")
         .getAnimations()
         .some((animation) => animation.playState === "running"),
   );
@@ -501,7 +522,7 @@ test("corner orientation, anchored drag preview, and readable floating text cont
   await page.mouse.down();
   await page.waitForTimeout(500);
   await page.mouse.move(20, 20);
-  const preview = dock.locator("[part=drag-preview]");
+  const preview = dock.locator("[part~=drag-preview]");
   await expect(preview).toBeVisible();
   await expect(preview).toHaveAttribute("data-corner", "top-left");
   const during = await handle.boundingBox();
@@ -515,10 +536,10 @@ test("corner orientation, anchored drag preview, and readable floating text cont
   await expect(dock).toHaveAttribute("corner", "top-left");
   await expect(preview).toBeHidden();
   await handle.click();
-  const help = page.getByRole("button", { name: "More", exact: true });
+  const help = page.getByRole("button", { name: "Full menu", exact: true });
   expect(
     await help.evaluate((node) => getComputedStyle(node).backgroundColor),
-  ).toBe("rgba(0, 0, 0, 0)");
+  ).not.toBe("rgba(0, 0, 0, 0)");
   expect(
     await help.evaluate((node) => getComputedStyle(node).backdropFilter),
   ).toBe("none");
@@ -561,32 +582,24 @@ test("adaptive defaults, rounded compact backdrop, and locked-corner affordances
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Open Nook menu" }).click();
   const root = page.getByRole("dialog", { name: "Nook", exact: true });
-  if (fullMaterial) {
-    const compactFilter = await root.evaluate(
-      (node) => getComputedStyle(node, "::before").backdropFilter,
-    );
-    expect(compactFilter).toBe(fullMaterial.filter);
-  }
+  if (fullMaterial) expect(fullMaterial.filter).toContain("blur(24px)");
   expect(
     await root.evaluate((node) => getComputedStyle(node, "::before").maskImage),
-  ).toBe("none");
+  ).toContain("radial-gradient");
   expect(
     await root.evaluate(
       (node) => getComputedStyle(node, "::before").backdropFilter,
     ),
-  ).toContain("blur(24px)");
+  ).toContain("blur(3px)");
+  const choice = root.getByRole("button", { name: "Feedback", exact: true });
   expect(
-    await root
-      .getByRole("button", { name: "Feedback", exact: true })
-      .evaluate((node) => getComputedStyle(node).backgroundColor),
-  ).toBe("rgba(0, 0, 0, 0)");
+    await choice.evaluate((node) => getComputedStyle(node).backgroundColor),
+  ).not.toBe("rgba(0, 0, 0, 0)");
   expect(
-    await root.evaluate(
-      (node) => getComputedStyle(node, "::before").borderRadius,
-    ),
-  ).toBe("16px");
+    await choice.evaluate((node) => getComputedStyle(node).borderRadius),
+  ).toBe("50%");
   expect(
-    await root.evaluate((node) => getComputedStyle(node, "::before").boxShadow),
+    await choice.evaluate((node) => getComputedStyle(node).boxShadow),
   ).not.toBe("none");
   await dock.evaluate(
     (node) =>
@@ -600,10 +613,10 @@ test("adaptive defaults, rounded compact backdrop, and locked-corner affordances
         "left-center",
       ]),
   );
-  const tooltip = dock.locator("[part=handle-tooltip]");
+  const tooltip = dock.locator("[part~=handle-tooltip]");
   if (!isMobile) {
     await page.getByRole("button", { name: "Close Nook menu" }).hover();
-    await expect(tooltip.locator("[part=drag-hint]")).toBeHidden();
+    await expect(tooltip.locator("[part~=drag-hint]")).toBeHidden();
   }
   await dock.evaluate((node) =>
     node.open(node.querySelector("#keyboard-guide")),
@@ -616,7 +629,7 @@ test("adaptive defaults, rounded compact backdrop, and locked-corner affordances
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.waitForTimeout(500);
-  await expect(dock.locator("[part=drag-preview]")).toBeHidden();
+  await expect(dock.locator("[part~=drag-preview]")).toBeHidden();
   await page.mouse.up();
 });
 
@@ -629,12 +642,12 @@ test("motion is restrained and reduced-motion suppresses scripted settling", asy
   const root = page.getByRole("dialog", { name: "Nook", exact: true });
   expect(
     await root.evaluate((node) => getComputedStyle(node).animationName),
-  ).toBe("arrive");
+  ).toBe("reveal");
   await dock.evaluate((node) => node.setAttribute("corner", "top-left"));
   expect(
     await dock.evaluate(
       (node) =>
-        node.shadowRoot.querySelector("[part=handle]").getAnimations().length,
+        node.shadowRoot.querySelector("[part~=handle]").getAnimations().length,
     ),
   ).toBeGreaterThan(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -643,7 +656,7 @@ test("motion is restrained and reduced-motion suppresses scripted settling", asy
     await dock.evaluate(
       (node) =>
         node.shadowRoot
-          .querySelector("[part=handle]")
+          .querySelector("[part~=handle]")
           .getAnimations()
           .filter((animation) => animation.playState === "running").length,
     ),
@@ -728,10 +741,10 @@ test("command search stays pinned to the anchor edge as results change", async (
     const positions = await page.evaluate(() => {
       const root = document.querySelector("nook-dock").shadowRoot;
       const search = root
-        .querySelector("[part=command-search]")
+        .querySelector("[part~=command-search]")
         .getBoundingClientRect();
       const results = root
-        .querySelector("[part=command-results]")
+        .querySelector("[part~=command-results]")
         .getBoundingClientRect();
       return { search: search.y, results: results.y };
     });
@@ -767,7 +780,7 @@ test("priority overflow adapts in the root and typography stays consistent", asy
   ).toBeHidden();
   await page.setViewportSize({ width: 280, height: 700 });
   await expect(
-    root.getByRole("button", { name: "More", exact: true }),
+    root.getByRole("button", { name: "Full menu", exact: true }),
   ).toBeVisible();
   await expect(
     root.getByRole("button", { name: "First shortcut", exact: true }),
@@ -775,18 +788,18 @@ test("priority overflow adapts in the root and typography stays consistent", asy
   await expect(
     root.getByRole("button", { name: "Root three", exact: true }),
   ).toBeHidden();
-  await root.getByRole("button", { name: "More", exact: true }).click();
+  await root.getByRole("button", { name: "Full menu", exact: true }).click();
   await expect(
     page
-      .getByRole("dialog", { name: "More", exact: true })
+      .getByRole("dialog", { name: "Full menu", exact: true })
       .getByRole("button", { name: "Root three", exact: true }),
   ).toBeVisible();
   await page.evaluate(() =>
     document.querySelector("nook-dock").open("welcome"),
   );
   const heading = page
-    .getByRole("dialog", { name: "Welcome to Nook", exact: true })
-    .getByRole("heading", { name: "Welcome to Nook", exact: true });
+    .getByRole("dialog", { name: "Quick tour", exact: true })
+    .getByRole("heading", { name: "Quick tour", exact: true });
   await expect(heading).toHaveCSS("font-size", "16px");
   await expect(heading).toHaveCSS("font-weight", "600");
   await page.evaluate(() =>
@@ -876,8 +889,8 @@ test("initial position attributes survive native custom-element upgrade", async 
   await page.route(new URL("/", page.url()).href, async (route) => {
     const response = await route.fetch();
     const body = (await response.text()).replace(
-      '<nook-dock id="dock">',
-      '<nook-dock id="dock" position="left-center" disabled-positions="top-center">',
+      /<nook-dock id="dock"([^>]*)>/,
+      '<nook-dock id="dock"$1 position="left-center" disabled-positions="top-center">',
     );
     await route.fulfill({ response, body });
   });
@@ -902,10 +915,10 @@ test("held dial requires release on a visible option", async ({ page }) => {
   const box = await handle.boundingBox();
   const x = box.x + box.width / 2,
     y = box.y + box.height / 2;
-  const dial = page.locator('[part="swipe-dial"]');
+  const dial = page.locator('[part~="swipe-dial"]');
   const all = dial
-    .locator('[part="swipe-dial-option"]')
-    .filter({ hasText: "All actions" });
+    .locator('[part~="swipe-dial-option"]')
+    .filter({ hasText: "Full menu" });
   const start = async () => {
     await page.mouse.move(x, y);
     await page.mouse.down();
@@ -915,7 +928,7 @@ test("held dial requires release on a visible option", async ({ page }) => {
   await start();
   await expect(all).toBeVisible();
   const target = await all.boundingBox();
-  expect(target.width).toBeGreaterThanOrEqual(88);
+  expect(target.width).toBeGreaterThanOrEqual(56);
   await page.mouse.move(
     target.x + target.width / 2,
     target.y + target.height / 2,
@@ -934,7 +947,7 @@ test("held dial requires release on a visible option", async ({ page }) => {
   await page.mouse.move(next.x + next.width / 2, next.y + next.height / 2);
   await page.mouse.up();
   await expect(
-    page.getByRole("dialog", { name: "All actions", exact: true }),
+    page.getByRole("dialog", { name: "Full menu", exact: true }),
   ).toBeVisible();
 });
 
@@ -1144,11 +1157,11 @@ test("clamped hover tooltip text preserves its bottom padding", async ({
   }, label);
   const action = page.getByRole("button", { name: label, exact: true });
   await action.hover();
-  const tooltip = action.locator("[part=tooltip]");
+  const tooltip = action.locator("[part~=tooltip]");
   await expect(tooltip).toHaveCSS("opacity", "1");
   const checkPadding = async () => {
     const metrics = await tooltip.evaluate((el) => {
-      const text = el.querySelector("[part=tooltip-text]");
+      const text = el.querySelector("[part~=tooltip-text]");
       const outer = el.getBoundingClientRect(),
         inner = text.getBoundingClientRect();
       const style = getComputedStyle(el);
@@ -1191,13 +1204,15 @@ test("settings and feedback have roomier widths while respecting available space
       exact: true,
     });
     await expect(surface).toBeVisible();
-    const box = await surface.boundingBox();
     const viewport = page.viewportSize();
     const expected =
       isMobile && view === "feedback"
         ? viewport.width
         : Math.min(width, viewport.width - 32);
-    expect(box.width).toBeCloseTo(expected, 0);
+    await expect
+      .poll(async () => (await surface.boundingBox()).width)
+      .toBeCloseTo(expected, 0);
+    const box = await surface.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
     if (!isMobile) {

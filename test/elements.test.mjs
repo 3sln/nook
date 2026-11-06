@@ -80,10 +80,12 @@ async function observed(predicate) {
   const deadline = Date.now() + 2000;
   while (!predicate() && Date.now() < deadline) await settle();
 }
-function fixture() {
+function fixture(attributes = {}) {
   const dock = document.createElement("nook-dock");
   dock.innerHTML =
     '<nook-action id="action" label="Share"></nook-action><nook-panel id="panel" root label="Feedback" feedback><template slot="content"><input value="original"></template></nook-panel><nook-setting id="setting" label="Dark" type="toggle" value="false"></nook-setting>';
+  for (const [name, value] of Object.entries(attributes))
+    dock.setAttribute(name, value);
   document.body.append(dock);
   return dock;
 }
@@ -279,7 +281,7 @@ test("live content switches presentation without remounting existing items", asy
   expect(root.el.dataset.presentation).toBe("compact");
   dock.setAttribute("root-presentation", "expanded");
   await settle();
-  expect(root.el.dataset.presentation).toBe("expanded");
+  expect(root.el.dataset.presentation).toBe("compact");
   dock.remove();
   await settle();
 });
@@ -519,7 +521,10 @@ test("holding Alt reveals assigned numbers and plain numbers do not select items
   await settle();
   expect(dock.anchor.hasAttribute("data-alt-held")).toBe(true);
   expect(dock.anchor.dataset.numbering).toBe("true");
-  expect(button.querySelector("[part=number]").textContent).toBe("1");
+  const assignedNumber = String(dock.numberedItems().indexOf(button) + 1);
+  expect(button.querySelector("[part=number]").textContent).toBe(
+    assignedNumber,
+  );
   document.dispatchEvent(
     new window.KeyboardEvent("keyup", {
       key: "Alt",
@@ -541,7 +546,7 @@ test("holding Alt reveals assigned numbers and plain numbers do not select items
   document.dispatchEvent(
     new window.KeyboardEvent("keydown", {
       key: "¡",
-      code: "Digit1",
+      code: `Digit${assignedNumber}`,
       altKey: true,
       bubbles: true,
       cancelable: true,
@@ -553,20 +558,40 @@ test("holding Alt reveals assigned numbers and plain numbers do not select items
   await settle();
 });
 
-test("first opening pulses, introduces Nook, and remembers the introduction", async () => {
+test("first opening offers an optional badged tutorial without blocking actions", async () => {
   window.localStorage.removeItem("@3sln/nook:tutorial:v1");
-  const dock = fixture();
+  const dock = fixture({ position: "bottom-right", corner: "bottom-right" });
   await settle();
   expect(dock.handle.classList.contains("inviting")).toBe(true);
   dock.open();
-  expect(dock.state.path).toEqual(["welcome"]);
+  expect(dock.state.path).toEqual(["root"]);
+  assert.ok(dock.rootEntries.some((entry) => entry.id === "welcome"));
+  assert.equal(window.localStorage.getItem("@3sln/nook:tutorial:v1"), null);
+  assert.equal(dock.state.needsIntro, true);
+  dock.builtins.get("settings").click();
+  assert.equal(dock.state.path.at(-1), "settings");
+  dock.close();
+  dock.open();
+  dock.style.setProperty("--nook-root-max-items", "2");
+  await settle();
+  dock.builtins.get("all").click();
+  const guide = dock.views.get("all").overflowButtons.get("welcome").button;
+  assert.equal(guide.getAttribute("aria-label"), "Quick tour");
+  guide.click();
+  assert.equal(dock.state.path.at(-1), "welcome");
   expect(dock.handle.classList.contains("inviting")).toBe(false);
-  expect(window.localStorage.getItem("@3sln/nook:tutorial:v1")).toBe("seen");
+  expect(window.localStorage.getItem("@3sln/nook:tutorial:v1")).toBe(null);
   dock.views
     .get("welcome")
     .body.querySelector("[part=tutorial-continue]")
     .click();
   expect(dock.state.path).toEqual(["root"]);
+  assert.equal(dock.state.needsIntro, false);
+  assert.equal(
+    dock.rootEntries.some((entry) => entry.id === "welcome"),
+    false,
+  );
+  expect(window.localStorage.getItem("@3sln/nook:tutorial:v1")).toBe("seen");
   expect(dock.handle.classList.contains("inviting")).toBe(false);
   dock.remove();
   await settle();
@@ -967,14 +992,15 @@ test("tutorial labels and templates customize live while preserving device regio
   touch.remove();
   dock.tutorial = null;
   await settle();
-  expect(
-    keyboard.textContent.includes("A small corner for useful extras."),
-  ).toBe(true);
-  expect(welcome.heading.textContent).toBe("Welcome to Nook");
+  expect(keyboard.textContent.includes("Arrows move; Enter selects.")).toBe(
+    true,
+  );
+  expect(welcome.heading.textContent).toBe("Quick tour");
 });
 
 test("priority allocation fills root and groups overflow without losing item identity", async () => {
   const dock = fixture();
+  dock.style.setProperty("--nook-root-max-items", "5");
   const extra = (label, priority, group) => {
     const action = document.createElement("nook-action");
     action.setAttribute("label", label);
@@ -993,7 +1019,7 @@ test("priority allocation fills root and groups overflow without losing item ide
   expect(dock.rootItems.includes(tools)).toBe(true);
   expect(dock.overflowItems.includes(first)).toBe(true);
   expect(dock.overflowItems.includes(support)).toBe(true);
-  expect(dock.builtins.get("quick").hidden).toBe(false);
+  expect(dock.builtins.get("quick").hidden).toBe(true);
   const overflow = dock.views.get("full");
   const button = overflow.overflowButtons.get(support).button;
   expect(overflow.overflowGroups.get("Support").el.hidden).toBe(false);
@@ -1025,34 +1051,38 @@ test("priority allocation fills root and groups overflow without losing item ide
   expect(button.isConnected).toBe(false);
 });
 
-test("resizing and builtin priorities rebalance root while settings remain accessible", async () => {
+test("reserved root slots survive resize and builtin priorities", async () => {
   const width = window.innerWidth;
   try {
     window.innerWidth = 280;
     const dock = fixture();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       const item = document.createElement("nook-action");
       item.setAttribute("label", `Extra ${i}`);
       item.priority = 50 - i;
       dock.append(item);
     }
     await settle();
-    expect(dock.rootEntries.length).toBe(3);
-    expect(dock.overflowEntries.some((entry) => entry.id === "settings")).toBe(
-      true,
+    assert.equal(dock.rootEntries.length, 6);
+    assert.deepEqual(
+      dock.rootEntries.slice(0, 2).map((entry) => entry.id),
+      ["all", "settings"],
     );
-    expect(dock.surfaceAvailable("settings")).toBe(true);
-    dock.open("overflow");
-    dock.views.get("full").overflowButtons.get("settings").button.click();
-    expect(dock.state.path.at(-1)).toBe("settings");
-    dock.priorities = { settings: 200 };
+    assert.equal(
+      dock.overflowEntries.some((entry) => entry.id === "settings"),
+      false,
+    );
+    dock.priorities = { settings: -1000 };
     await settle();
-    expect(dock.rootEntries[0].id).toBe("settings");
+    assert.deepEqual(
+      dock.rootEntries.slice(0, 2).map((entry) => entry.id),
+      ["all", "settings"],
+    );
     window.innerWidth = 1024;
     window.dispatchEvent(new Event("resize"));
     await settle();
-    expect(dock.rootEntries.length).toBe(4);
-    expect(dock.views.get("root").presentation).toBe("compact");
+    assert.equal(dock.rootEntries.length, 6);
+    assert.equal(dock.views.get("root").presentation, "compact");
   } finally {
     window.innerWidth = width;
   }
@@ -1321,6 +1351,13 @@ test("capture sessions accumulate, review and remove snapshots, then restore the
   assert.equal(shadow.querySelector("[part=capture-gallery]").hidden, true);
   shadow.querySelector("[part=capture-review]").click();
   assert.equal(shadow.querySelector("[part=capture-gallery]").hidden, false);
+  shadow.querySelector("[part=capture-hide-previews]").click();
+  assert.equal(shadow.querySelector("[part=capture-gallery]").hidden, true);
+  assert.equal(
+    shadow.querySelector("[part=capture-review]").getAttribute("aria-expanded"),
+    "false",
+  );
+  shadow.querySelector("[part=capture-review]").click();
   assert.equal(shadow.querySelectorAll("[part=capture-thumbnail]").length, 2);
   shadow.querySelector("[part=capture-remove]").click();
   assert.equal(
@@ -1362,7 +1399,7 @@ test("wrapped apps remain live while bounds follow the dock and viewport opt-out
   assert.equal(app.querySelector("input").value, "draft");
 });
 
-test("all actions includes root and overflow items and reconciles removals live", async () => {
+test("full menu includes root and overflow items and reconciles removals live", async () => {
   const dock = fixture();
   await settle();
   dock.open("all");
@@ -1391,7 +1428,7 @@ test("releasing a held dial outside its options cancels without a fast-swipe fal
   assert.equal(dock.swipeDial.shown, false);
 });
 
-test("horizontal and diagonal swipes open all actions even without root overflow", async () => {
+test("horizontal and diagonal swipes open full menu even without root overflow", async () => {
   const dock = document.createElement("nook-dock");
   dock.innerHTML = '<nook-action label="Only action"></nook-action>';
   document.body.append(dock);
@@ -1569,5 +1606,169 @@ test("stress feedback fixtures project an injected screenshot hook in both feedb
     dock.views.get("feedback").body.querySelector("[part=feedback-capture]")
       .hidden,
     true,
+  );
+});
+
+test("nook-item references inherit command names and bindings with one execution path", async () => {
+  const dock = document.createElement("nook-dock");
+  dock.innerHTML =
+    '<nook-item id="save-item" command="save" keybind="Alt+X"></nook-item><nook-command id="save" name="Save changes" description="Save the current draft" keybind="Alt+C"></nook-command>';
+  document.body.append(dock);
+  await settle();
+  const item = dock.querySelector("nook-item"),
+    command = dock.querySelector("nook-command");
+  assert.equal(item.command, "save");
+  assert.equal(item.keybind, "Alt+C");
+  assert.equal(dock.anchorRect.wrapped, false);
+  const button = dock.records.get(item).buttons[0];
+  assert.equal(button.getAttribute("aria-label"), "Save changes");
+  assert.ok(button.querySelector(".tooltip").textContent.includes("Alt+C"));
+  let picks = 0,
+    runs = 0;
+  dock.addEventListener("nook-select", (event) => {
+    picks++;
+    assert.equal(event.detail.source, item);
+    assert.equal(event.detail.command, command);
+  });
+  dock.addEventListener("nook-command", (event) => {
+    runs++;
+    assert.equal(event.detail.source, command);
+  });
+  dock.activate(item);
+  assert.equal(picks, 1);
+  assert.equal(runs, 1);
+  document.dispatchEvent(
+    new window.KeyboardEvent("keydown", {
+      key: "c",
+      code: "KeyC",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  assert.equal(picks, 1);
+  assert.equal(runs, 2);
+  document.dispatchEvent(
+    new window.KeyboardEvent("keydown", {
+      key: "x",
+      code: "KeyX",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  assert.equal(runs, 2);
+  command.keybind = "Alt+S";
+  command.setAttribute("name", "Store draft");
+  await settle();
+  assert.equal(item.keybind, "Alt+S");
+  assert.equal(dock.records.get(item).buttons[0], button);
+  assert.equal(button.getAttribute("aria-label"), "Store draft");
+});
+
+test("referencing items share command arguments and can override invocation", async () => {
+  const dock = document.createElement("nook-dock");
+  dock.innerHTML =
+    '<nook-item id="first" command="create"></nook-item><nook-item id="second" command="create" label="Create another"></nook-item><nook-command id="create" name="Create note" description="Create a named note"><nook-arg name="title" label="Title" required></nook-arg></nook-command>';
+  document.body.append(dock);
+  await settle();
+  const first = dock.querySelector("#first"),
+    second = dock.querySelector("#second"),
+    command = dock.querySelector("#create");
+  dock.open();
+  dock.addEventListener("nook-select", (event) => event.preventDefault(), {
+    once: true,
+  });
+  dock.activate(first);
+  assert.deepEqual(dock.state.path, ["root"]);
+  dock.activate(first);
+  assert.equal(dock.state.path.at(-1), command);
+  const input = dock.views.get(command).body.querySelector("input[name=title]");
+  input.value = "An unfinished draft";
+  dock.close();
+  dock.activate(second);
+  assert.equal(
+    dock.views.get(command).body.querySelector("input[name=title]"),
+    input,
+  );
+  assert.equal(input.value, "An unfinished draft");
+  let result;
+  dock.addEventListener("nook-command", (event) => (result = event.detail));
+  dock.views
+    .get(command)
+    .body.querySelector("form")
+    .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  assert.equal(result.source, command);
+  assert.equal(result.args.title, "An unfinished draft");
+});
+
+test("item references reconcile availability and standalone items remain custom hooks", async () => {
+  const dock = document.createElement("nook-dock");
+  dock.context = { page: "draft" };
+  dock.innerHTML =
+    '<nook-item id="linked" command="later"></nook-item><nook-item id="custom" label="Custom flow"></nook-item>';
+  document.body.append(dock);
+  await settle();
+  const linked = dock.querySelector("#linked"),
+    custom = dock.querySelector("#custom");
+  assert.equal(dock.records.has(linked), false);
+  const command = document.createElement("nook-command");
+  command.id = "later";
+  command.setAttribute("name", "Later");
+  command.setAttribute("description", "A command added live");
+  dock.append(command);
+  await settle();
+  assert.equal(dock.records.has(linked), true);
+  command.setAttribute("disabled", "");
+  await settle();
+  assert.equal(dock.records.has(linked), false);
+  command.removeAttribute("disabled");
+  await settle();
+  assert.equal(dock.records.has(linked), true);
+  command.remove();
+  await settle();
+  assert.equal(dock.records.has(linked), false);
+  let detail;
+  dock.addEventListener("nook-select", (event) => {
+    detail = event.detail;
+    event.preventDefault();
+  });
+  dock.open();
+  dock.activate(custom);
+  assert.equal(detail.source, custom);
+  assert.equal(detail.command, null);
+  assert.deepEqual(detail.context, { page: "draft" });
+  assert.deepEqual(dock.state.path, ["root"]);
+});
+
+test("an open requested immediately after connection waits for the menu query to boot", async () => {
+  const dock = document.createElement("nook-dock");
+  dock.innerHTML = '<nook-item label="Immediate"></nook-item>';
+  document.body.append(dock);
+  dock.open();
+  await settle();
+  assert.deepEqual(dock.state.path, ["root"]);
+  assert.equal(dock.views.get("root").el.hidden, false);
+});
+
+test("translating feedback labels preserves the live message input and draft", async () => {
+  const dock = fixture();
+  dock.querySelector("[feedback]").remove();
+  dock.feedback = { submit: async () => {} };
+  await settle();
+  dock.open("feedback");
+  const body = dock.views.get("feedback").body,
+    input = body.querySelector("textarea");
+  input.value = "Keep my feedback draft";
+  dock.localization = {
+    locale: "es",
+    catalogue: { nook: { "Tell us more": "Cuéntanos más" } },
+  };
+  await settle();
+  assert.equal(body.querySelector("textarea"), input);
+  assert.equal(input.value, "Keep my feedback draft");
+  assert.equal(
+    body.querySelector("[part=feedback-message-label]").textContent,
+    "Cuéntanos más",
   );
 });

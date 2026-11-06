@@ -62,7 +62,7 @@ test("stress: eighty actions, long groups, and every permitted anchor", async ({
       position,
     );
     await insideViewport(page, more);
-    await noHorizontalScroll(more.locator("[part=body]"));
+    await noHorizontalScroll(more.locator("[part~=body]"));
   }
   const longToken = await page.evaluate(() =>
     document.querySelector("#stress-action-1").getAttribute("label"),
@@ -70,7 +70,7 @@ test("stress: eighty actions, long groups, and every permitted anchor", async ({
   const longItem = more
     .getByRole("button", { name: longToken, exact: true })
     .first();
-  await cappedText(longItem.locator("[part=item-label]"), 3);
+  await cappedText(longItem.locator("[part~=item-label]"), 3);
   await expect(longItem).toHaveAccessibleName(longToken);
   const last = await page.evaluate(() =>
     document.querySelector("#stress-action-79").getAttribute("label"),
@@ -78,7 +78,7 @@ test("stress: eighty actions, long groups, and every permitted anchor", async ({
   await more
     .getByRole("button", { name: last, exact: true })
     .scrollIntoViewIfNeeded();
-  await insideViewport(page, more.locator("[part=header]"));
+  await insideViewport(page, more.locator("[part~=header]"));
   if (isMobile)
     await expect(
       more.getByRole("button", { name: "Close menu", exact: true }),
@@ -97,10 +97,10 @@ test("stress: forty settings keep the final control and close affordance reachab
     name: "Quick settings",
     exact: true,
   });
-  const rows = settings.locator("[part=setting]");
+  const rows = settings.locator("[part~=setting]");
   await expect(rows).toHaveCount(40);
   await insideViewport(page, settings);
-  await noHorizontalScroll(settings.locator("[part=body]"));
+  await noHorizontalScroll(settings.locator("[part~=body]"));
   const last = rows.last().locator("input");
   await last.fill("73");
   await expect(page.locator("#stress-setting-39")).toHaveAttribute(
@@ -108,7 +108,7 @@ test("stress: forty settings keep the final control and close affordance reachab
     "73",
   );
   await expect(last).toBeInViewport();
-  await insideViewport(page, settings.locator("[part=header]"));
+  await insideViewport(page, settings.locator("[part~=header]"));
   if (isMobile)
     await expect(
       settings.getByRole("button", { name: "Close menu", exact: true }),
@@ -152,15 +152,15 @@ test("stress: sixty rich enum options wrap and the last choice can be selected",
     exact: true,
   });
   await settings
-    .locator("[part=setting]")
+    .locator("[part~=setting]")
     .nth(3)
     .locator('[part~="enum-trigger"]')
     .click();
   const list = page.getByRole("listbox");
   await expect(list.getByRole("option")).toHaveCount(60);
   await noHorizontalScroll(list);
-  await cappedText(list.locator("[part=enum-option-label]").first(), 3);
-  await cappedText(list.locator("[part=enum-option-description]").first(), 3);
+  await cappedText(list.locator("[part~=enum-option-label]").first(), 3);
+  await cappedText(list.locator("[part~=enum-option-description]").first(), 3);
   const last = list.getByRole("option").last();
   await last.scrollIntoViewIfNeeded();
   await shot(page, testInfo, "rich-enum-long-options.png");
@@ -178,17 +178,19 @@ test("stress: command search stays fixed with long names, descriptions, and keyb
   await scenario(page, "35 commands", "commands");
   const palette = page.getByRole("dialog", { name: "Commands", exact: true });
   await insideViewport(page, palette);
-  await noHorizontalScroll(palette.locator("[part=body]"));
-  await noHorizontalScroll(palette.locator("[part=command-results]"));
-  await cappedText(palette.locator("[part=command-name]:visible").first(), 2);
+  await noHorizontalScroll(palette.locator("[part~=body]"));
+  await noHorizontalScroll(palette.locator("[part~=command-results]"));
+  await cappedText(palette.locator("[part~=command-name]:visible").first(), 2);
   await cappedText(
-    palette.locator("[part=command-description]:visible").first(),
+    palette.locator("[part~=command-description]:visible").first(),
     3,
   );
   const search = page.getByRole("searchbox", { name: "Search commands" });
   const before = await search.boundingBox();
   await search.fill("Command 35:");
-  await expect(palette.locator("[part=command-result]:visible")).toHaveCount(1);
+  await expect(palette.locator("[part~=command-result]:visible")).toHaveCount(
+    1,
+  );
   await expect
     .poll(async () => Math.abs((await search.boundingBox()).y - before.y))
     .toBeLessThan(1);
@@ -198,7 +200,7 @@ test("stress: command search stays fixed with long names, descriptions, and keyb
     .locator("nook-dock")
     .locator('.surface[data-view="command"]:visible');
   await insideViewport(page, args);
-  await noHorizontalScroll(args.locator("[part=body]"));
+  await noHorizontalScroll(args.locator("[part~=body]"));
   await args.getByRole("button", { name: "Run command", exact: true }).click();
   await expect(args).toBeHidden();
 });
@@ -218,7 +220,7 @@ test("stress: long submenu labels use readable rows and long panel headings stay
   const menu = page.getByRole("dialog", { name: title, exact: true });
   await expect(menu).toHaveAttribute("data-layout", "list");
   await insideViewport(page, menu);
-  await noHorizontalScroll(menu.locator("[part=body]"));
+  await noHorizontalScroll(menu.locator("[part~=body]"));
   await shot(page, testInfo, "long-submenu-labels.png");
   await page.evaluate(() =>
     document
@@ -229,27 +231,30 @@ test("stress: long submenu labels use readable rows and long panel headings stay
     .locator("nook-dock")
     .locator('.surface[data-view="panel"]:visible');
   await insideViewport(page, panel);
-  await noHorizontalScroll(panel.locator("[part=body]"));
-  await cappedText(panel.locator("[part=heading]"), 4);
-  const bounds = await panel.locator("[part=header]").boundingBox();
+  await noHorizontalScroll(panel.locator("[part~=body]"));
+  await cappedText(panel.locator("[part~=heading]"), 4);
+  const bounds = await panel.locator("[part~=header]").boundingBox();
   expect(bounds.height).toBeLessThan(page.viewportSize().height / 2);
   await shot(page, testInfo, "bounded-panel-heading.png");
 });
 
-test("stress: root setting, large text, and a narrow viewport avoid horizontal clipping", async ({
+test("stress: long setting, large text, and a narrow viewport avoid horizontal clipping", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 280, height: 568 });
-  await page
-    .getByRole("button", { name: "Long root setting", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Long setting", exact: true }).click();
   await page.getByRole("button", { name: "Large text", exact: true }).click();
-  await page.evaluate(() => document.querySelector("nook-dock").open());
-  const root = page.getByRole("dialog", { name: "Nook", exact: true });
+  await page.evaluate(() =>
+    document.querySelector("nook-dock").open("settings"),
+  );
+  const root = page.getByRole("dialog", {
+    name: "Quick settings",
+    exact: true,
+  });
   await insideViewport(page, root);
-  await noHorizontalScroll(root.locator("[part=body]"));
-  await cappedText(root.locator("[part=setting-name]"), 3);
-  await cappedText(root.locator("[part=description]"), 3);
+  await noHorizontalScroll(root.locator("[part~=body]"));
+  await cappedText(root.locator("[part~=setting-name]"), 3);
+  await cappedText(root.locator("[part~=description]"), 3);
   const trigger = root.locator('[part~="enum-trigger"]');
   await trigger.scrollIntoViewIfNeeded();
   await expect(trigger).toBeInViewport();
@@ -264,7 +269,7 @@ test("stress: feedback supports long categories, filenames, and large type", asy
   await page.setViewportSize({ width: 320, height: 640 });
   await scenario(page, "Feedback", "feedback");
   const feedback = page.getByRole("dialog", { name: "Feedback", exact: true });
-  await feedback.locator("[part=feedback-file-input]").setInputFiles({
+  await feedback.locator("[part~=feedback-file-input]").setInputFiles({
     name: "Screenshot_" + "long_name_".repeat(15) + ".png",
     mimeType: "image/png",
     buffer: Buffer.from(
@@ -272,13 +277,13 @@ test("stress: feedback supports long categories, filenames, and large type", asy
       "base64",
     ),
   });
-  await expect(feedback.locator("[part=feedback-attachment]")).toHaveCount(1);
-  await cappedText(feedback.locator("[part=feedback-attachment-name]"), 2);
+  await expect(feedback.locator("[part~=feedback-attachment]")).toHaveCount(1);
+  await cappedText(feedback.locator("[part~=feedback-attachment-name]"), 2);
   await feedback
     .getByRole("textbox", { name: "Tell us more" })
     .fill("A detailed report with a screenshot");
   await insideViewport(page, feedback);
-  await noHorizontalScroll(feedback.locator("[part=body]"));
+  await noHorizontalScroll(feedback.locator("[part~=body]"));
   await shot(page, testInfo, "feedback-long-attachment.png");
   await feedback
     .getByRole("button", { name: "Send feedback", exact: true })
@@ -314,11 +319,25 @@ test("stress: portrait/landscape changes restore preference without treating key
   await scenario(page, "40 settings", "settings");
   const text = page
     .getByRole("dialog", { name: "Quick settings", exact: true })
-    .locator("[part=setting]")
+    .locator("[part~=setting]")
     .nth(1)
     .locator("input");
   await text.fill("Keep this draft during rotation");
-  await page.setViewportSize({ width: 390, height: 300 });
+  await expect(text).toBeFocused();
+  await page.evaluate(() => {
+    Object.defineProperty(visualViewport, "height", {
+      configurable: true,
+      value: 300,
+    });
+    visualViewport.dispatchEvent(new Event("resize"));
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.querySelector("nook-dock").anchorRect.height,
+      ),
+    )
+    .toBe(300);
   expect(
     await page.evaluate(() =>
       document
@@ -330,6 +349,10 @@ test("stress: portrait/landscape changes restore preference without treating key
     "position",
     "top-left",
   );
+  await page.evaluate(() => {
+    delete visualViewport.height;
+    visualViewport.dispatchEvent(new Event("resize"));
+  });
   await page.setViewportSize({ width: 844, height: 390 });
   await expect(page.locator(dockSelector)).toHaveAttribute(
     "position",
@@ -367,7 +390,7 @@ test("stress: full settings link stays reachable after a dense list", async ({
   await expect(link).toHaveAttribute("href", "/account/settings");
   await link.scrollIntoViewIfNeeded();
   await insideViewport(page, link);
-  await noHorizontalScroll(settings.locator("[part=body]"));
+  await noHorizontalScroll(settings.locator("[part~=body]"));
   await link.focus();
   await expect(link).toBeFocused();
   await page.evaluate(
@@ -418,8 +441,8 @@ test("stress: capture is wired in both feedback scenarios and stays compact unti
     await page
       .getByRole("button", { name: "Capture app view", exact: true })
       .click();
-    const session = page.locator("[part=capture-session]");
-    const count = session.locator("[part=capture-count]");
+    const session = page.locator("[part~=capture-session]");
+    const count = session.locator("[part~=capture-count]");
     await expect(session).toBeVisible();
     const compact = async () => {
       const box = await session.boundingBox();
@@ -434,7 +457,7 @@ test("stress: capture is wired in both feedback scenarios and stays compact unti
         .getByRole("button", { name: "Capture", exact: true })
         .click();
       await expect(count).toHaveText(String(shots));
-      await expect(session.locator("[part=capture-gallery]")).toBeHidden();
+      await expect(session.locator("[part~=capture-gallery]")).toBeHidden();
       await compact();
     }
     const review = session.getByRole("button", {
@@ -442,9 +465,17 @@ test("stress: capture is wired in both feedback scenarios and stays compact unti
       exact: true,
     });
     await review.click();
-    await expect(session.locator("[part=capture-gallery]")).toBeVisible();
-    await review.click();
+    await expect(session.locator("[part~=capture-gallery]")).toBeVisible();
+    await session
+      .getByRole("button", { name: "Hide previews", exact: true })
+      .click();
+    await expect(session.locator("[part~=capture-gallery]")).toBeHidden();
+    await expect(review).toHaveAttribute("aria-expanded", "false");
     await compact();
+    await review.click();
+    await page.keyboard.press("Escape");
+    await expect(session.locator("[part~=capture-gallery]")).toBeHidden();
+    await expect(session).toBeVisible();
     await session.getByRole("button", { name: "Done", exact: true }).click();
     await expect(session).toBeHidden();
     await expect(

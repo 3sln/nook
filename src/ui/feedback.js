@@ -12,7 +12,8 @@ export default function feedback({ view, make, i18n, dock, getHooks, signal }) {
   kind.type = "hidden";
   kind.name = "type";
   kind.value = "bug";
-  const label = make("label", "feedback-label", "Tell us more");
+  const label = make("label", "feedback-label");
+  label.append(make("span", "feedback-message-label", "Tell us more"));
   label.className = "feedback-label";
   const text = make("textarea", "feedback-message");
   text.name = "message";
@@ -104,7 +105,16 @@ export default function feedback({ view, make, i18n, dock, getHooks, signal }) {
   previewEmpty.hidden = true;
   const thumbnails = make("div", "capture-thumbnails");
   thumbnails.className = "capture-thumbnails";
-  gallery.append(largePreview, previewEmpty, thumbnails);
+  const hidePreviews = make("button", "capture-hide-previews", "Hide previews");
+  hidePreviews.type = "button";
+  hidePreviews.className = "quiet";
+  const collapsePreviews = () => {
+    gallery.hidden = true;
+    review.setAttribute("aria-expanded", "false");
+    review.focus();
+  };
+  hidePreviews.onclick = collapsePreviews;
+  gallery.append(hidePreviews, largePreview, previewEmpty, thumbnails);
   controls.append(shutter, review, captureDone);
   sessionUI.append(controls, captureStatus, gallery);
   (dock.overlayAnchor || dock.anchor).append(sessionUI);
@@ -273,7 +283,8 @@ export default function feedback({ view, make, i18n, dock, getHooks, signal }) {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      finishCapture();
+      if (!gallery.hidden) collapsePreviews();
+      else finishCapture();
     }
   });
   signal.addEventListener("abort", () => finishCapture(false), { once: true });

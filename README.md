@@ -12,7 +12,7 @@ Import `@3sln/nook` once in your browser entry point, then add one `<nook-dock>`
 
 ```html
 <nook-dock corner="bottom-right">
-  <nook-action id="share" label="Share page"></nook-action>
+  <nook-item id="share" label="Share page"></nook-item>
 </nook-dock>
 ```
 
@@ -25,7 +25,7 @@ dock.addEventListener("nook-action", ({ detail }) => {
 });
 ```
 
-Feedback is disabled until its submit hook is wired. Commands and Settings appear only when their definitions are present; More appears only when entries overflow. Configuration belongs to each dock, through attributes, properties, and inherited CSS custom properties; there is no global configuration registry.
+Feedback is disabled until its submit hook is wired. Commands and Settings appear only when their capabilities are present. Tap and held-swipe picking share one root dial. Configuration belongs to each dock, through attributes, properties, and inherited CSS custom properties; there is no global configuration registry.
 
 ## Try the demo
 
@@ -47,13 +47,19 @@ import "@3sln/nook";
 
 ```html
 <nook-dock corner="bottom-right">
-  <nook-action id="share" label="Share page" keybind="Alt+S">
+  <nook-command
+    id="share-page"
+    name="Share page"
+    description="Share the current page"
+    keybind="Alt+S"
+  ></nook-command>
+  <nook-item id="share" command="share-page">
     <template slot="icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <use href="#nook-icon-link"></use>
       </svg>
     </template>
-  </nook-action>
+  </nook-item>
 
   <nook-menu label="Resources">
     <nook-panel label="Page guide">
@@ -81,38 +87,41 @@ import "@3sln/nook";
 </nook-dock>
 ```
 
-Each dock owns only its descendants; elements from nested docks are excluded. Use one dock per app for predictable document-level shortcuts. Declarative `nook-action`, `nook-menu`, `nook-panel`, and `nook-setting` elements are hidden by their own shadow styles. Optionally include `nook-action,nook-menu,nook-panel,nook-setting,nook-command,nook-arg { display:none }` in the host stylesheet to hide definitions before JavaScript loads.
+Each dock owns only its descendants; elements from nested docks are excluded. Use one dock per app for predictable document-level shortcuts. Declarative `nook-item` (`nook-action` is a legacy alias), `nook-menu`, `nook-panel`, and `nook-setting` elements are hidden by their own shadow styles. Optionally include `nook-item,nook-action,nook-menu,nook-panel,nook-setting,nook-command,nook-arg { display:none }` in the host stylesheet to hide definitions before JavaScript loads.
 
 - `nook-dock`: the corner handle and composition root.
-- `nook-action`: emits intent for the embedding app to handle.
+- `nook-item`: a leaf choice that invokes a referenced command or emits a custom selection event.
+- `nook-action`: the compatibility alias; existing `nook-action` events and standalone keybindings continue to work.
 - `nook-menu`: a nested group of actions, panels, or menus.
 - `nook-panel`: an overlay surface for arbitrary application UI.
 - `nook-command`: a searchable command with optional declarative arguments.
 - `nook-arg`: a command argument definition.
 - `nook-setting`: an inline control. `type="toggle"`, `range`, `enum` (`select` is a compatibility alias), or native input types such as `color`, `number`, and `text`. `min`, `max`, `step`, and `value` reflect to the control. Toggle values use the strings `true` and `false`; the JS `value` property returns a boolean for toggles and a string for other controls.
 
-Top-level actions, panels, and menus fill the root automatically. When they exceed the available row width, Nook reserves the last slot for **More** and moves lower-priority entries into an overflow menu. The default root limit is five items, including More; `--nook-root-max-items` can change that limit. Viewport width and the configured item size/gap can reduce it further. When everything fits, More disappears.
+Tap/click opens the root dial; a held swipe previews the same persistent buttons and chooses one on release. Up to six icon choices follow a curved arc. **Full menu** owns the horizontal endpoint and **Settings** owns the vertical endpoint when settings are available. The four inner positions are filled by prioritized contextual actions, panels, menus, Feedback, and Commands. Full menu always contains the complete grouped list, including choices shown in the dial. Smaller visible areas show fewer extras without moving or replacing the directional choices.
+
+The first-use Quick tour temporarily occupies an extra slot and has a small attention badge. It is also reachable from Full menu if the dial cannot fit it. It never intercepts normal menu use. Completing it removes the choice and releases its slot for another contextual item. `--nook-root-max-items` can reduce the dial limit, up to a hard maximum of six.
 
 ```html
-<nook-action label="Save" priority="100" group="Workspace"></nook-action>
-<nook-action label="Share" priority="50" group="Sharing"></nook-action>
+<nook-item label="Save" priority="100" group="Workspace"></nook-item>
+<nook-item label="Share" priority="50" group="Sharing"></nook-item>
 <nook-menu label="Export" priority="10" group="Workspace">
-  <nook-action label="PDF"></nook-action>
-  <nook-action label="Markdown"></nook-action>
+  <nook-item label="PDF"></nook-item>
+  <nook-item label="Markdown"></nook-item>
 </nook-menu>
 ```
 
-Higher numeric `priority` values win root slots. Equal priorities keep DOM order. `item.priority` and `item.group` reflect their attributes and update live. Groups organize overflow into labeled sections; they do not create extra navigation levels. Groups appear in order of their highest-priority member, and entries retain priority order within each group. Ungrouped entries appear under Other when named groups are present. There are no duplicate root entries in More.
+Higher numeric `priority` values win the available extra dial slots. Equal priorities keep DOM order. `item.priority` and `item.group` reflect their attributes and update live. Groups organize the Full menu list into labeled sections; they do not create extra navigation levels. Groups appear in order of their highest-priority member, and entries retain priority order within each group. Ungrouped entries appear under Other when named groups are present. There is one projected choice per source in each view; opening or closing views does not recreate controls.
 
-For compatibility, `root`/`.root = true` makes a nested definition eligible for the root and supplies priority 100 when no explicit priority is set. It is a preference, not a guarantee against overflow. Top-level definitions need no `root` attribute. Root settings remain inline controls; other settings populate the automatic Settings launcher. Individual commands remain in the Commands palette.
+For compatibility, `root`/`.root = true` makes a nested definition eligible for the root and supplies priority 100 when no explicit priority is set. It is a preference, not a guarantee against overflow. Top-level definitions need no `root` attribute. All `nook-setting` controls live in Settings, including legacy settings carrying `root`. Individual commands remain in the Commands palette.
 
-Automatic Feedback, Settings, and Commands launchers participate in allocation too. Their default priorities are 30, 20, and 10. Override them per dock:
+Feedback and Commands compete for extra slots with default priorities 30 and 10. Settings is reserved and cannot be displaced by item priority. Override them per dock:
 
 ```js
 dock.priorities = { feedback: 100, settings: 50, commands: 25 };
 ```
 
-Reassign the object to apply changes. Their shortcuts remain available when their launcher moves into More. Priority reflects app-provided configuration; Nook does not yet provide an end-user reorder interface or persist personal ordering. Embedders can store preferences and apply them through these properties.
+Reassign the object to apply changes. Their shortcuts remain available even when their launcher is outside the root dial. Priority reflects app-provided configuration; Nook does not yet provide an end-user reorder interface or persist personal ordering. Embedders can store preferences and apply them through these properties.
 
 `label` and `description` accept attributes or slotted templates. `slot="icon"` accepts a template or an element. Labels are accessible names; desktop tooltips include supported keybindings. Overflow entries show their labels inline. Set `--nook-label-display: block` to show text beneath root action icons. Set `hidden` or `disabled` to withdraw a definition and its descendants.
 
@@ -175,7 +184,7 @@ dock.addEventListener("nook-change", ({ detail: { source, value } }) => {
 });
 ```
 
-Native `color`, `number`, and `text` inputs and custom `<template slot="control">` remain available. Add `root` to put a setting directly in the root, or leave it off to include it in quick settings.
+Native `color`, `number`, and `text` inputs and custom `<template slot="control">` remain available. Settings always render inside Quick settings; `root` does not move controls into the dial.
 
 Set `settings-href` on the dock to show an **All settings** link below the quick settings controls:
 
@@ -224,21 +233,23 @@ The built-in form includes Bug report, UI / usability, Feature request, and Othe
 
 `attachFiles(files, { signal })` may prepare/upload files and return an array of files or app-owned descriptors; returning nothing stages the original files. Submission receives these as `{ kind: 'file' | 'screenshot', file }`. The defaults allow five attachments of up to 10 MiB each. Native file `accept` is a picker hint; your hooks/backend own delivery, validation, authorization, and any upload cleanup.
 
-`captureScreenshot({ root, exclude, signal })` is an optional app capability. “Capture app view” enters a session with a compact Capture / snapshot-count / Done toolbar, leaving the app navigable. Snapshot previews expand only when the count is selected; routine capture status is announced without occupying screen space. Users can take multiple snapshots, see their count, preview them, and remove individual snapshots before returning to their feedback draft. Done aborts the session signal. Nook hides only its own UI during each capture; wrapped app content stays visible. The hook receives the app root and Nook UI nodes to exclude. DOM renderers should honor both. Returned File/Blob values or app descriptors are staged for final submission, never automatically sent.
+`captureScreenshot({ root, exclude, signal })` is an optional app capability. “Capture app view” enters a session with a compact Capture / snapshot-count / Done toolbar, leaving the app navigable. Snapshot previews expand only when the count is selected; “Hide previews” or Escape collapses them back to the toolbar. Routine capture status is announced without occupying screen space. Users can take multiple snapshots, see their count, preview them, and remove individual snapshots before returning to their feedback draft. Done aborts the session signal. Nook hides only its own UI during each capture; wrapped app content stays visible. The hook receives the app root and Nook UI nodes to exclude. DOM renderers should honor both. Returned File/Blob values or app descriptors are staged for final submission, never automatically sent.
 
 `createTabCaptureSession()` reuses one browser sharing stream across snapshots and stops its tracks when Done aborts the signal; call `stop()` for explicit cleanup. The compatibility `captureTabScreenshot(options)` helper takes one shot and immediately stops sharing. Browser permission and a user gesture are required to begin sharing. The browser owns the surface chooser, so the selected surface cannot be guaranteed. These helpers are not silent DOM screenshot services. Apps may supply a DOM-to-image hook instead, subject to that renderer's font, image, shadow-DOM, and cross-origin limitations.
 
-Capture-session styling parts include `capture-session`, `capture-snapshot`, `capture-done`, `capture-review`, `capture-review-icon`, `capture-count`, `capture-status`, `capture-gallery`, `capture-preview-image`, `capture-thumbnails`, `capture-thumbnail`, `capture-preview`, and `capture-remove`.
+Capture-session styling parts include `capture-session`, `capture-snapshot`, `capture-done`, `capture-review`, `capture-review-icon`, `capture-count`, `capture-status`, `capture-gallery`, `capture-hide-previews`, `capture-preview-image`, `capture-thumbnails`, `capture-thumbnail`, `capture-preview`, and `capture-remove`.
 
-Feedback parts include `feedback-form`, `feedback-intro`, `feedback-types`, `feedback-type`, `feedback-label`, `feedback-message`, `feedback-tools`, `feedback-file-input`, `feedback-attach`, `feedback-capture`, `feedback-attachments`, `feedback-attachment`, `feedback-preview`, `feedback-attachment-name`, `feedback-remove`, `feedback-privacy`, `feedback-status`, `feedback-send`, `feedback-success`, `feedback-another`, and `feedback-done`.
+Feedback parts include `feedback-form`, `feedback-intro`, `feedback-types`, `feedback-type`, `feedback-label`, `feedback-message-label`, `feedback-message`, `feedback-tools`, `feedback-file-input`, `feedback-attach`, `feedback-capture`, `feedback-attachments`, `feedback-attachment`, `feedback-preview`, `feedback-attachment-name`, `feedback-remove`, `feedback-privacy`, `feedback-status`, `feedback-send`, `feedback-success`, `feedback-another`, and `feedback-done`.
 
 ## First use
 
-Before its first opening, Nook gives a brief attention burst: about three soft pulses over six seconds. It then stops. If unopened, it retries after a random 45–75 minutes. The cooldown is stored under `@3sln/nook:attention:v1`, so reloads do not restart the burst. Hidden tabs defer attention until visible; opening Nook stops reminders. The scheduler releases its timer/listeners when the last dock disconnects. The first open shows a short device-specific introduction, then “Got it” continues to the requested menu or panel. Escape may dismiss it immediately. Reduced-motion preferences disable the pulse. The keyboard-specific number tip appears only when layout data is available.
+Before its first opening, Nook gives a brief attention burst: about three soft pulses over six seconds, followed by a random 45–75 minute cooldown if unopened. The deadline is stored under `@3sln/nook:attention:v1`. Opening Nook stops the widget reminder and opens the usable dial immediately. A badged **Quick tour** choice provides optional, device-specific help. Escape or Back leaves it available; “Got it” acknowledges and removes it. Reduced-motion preferences disable the pulse and turn the gesture illustrations into static diagrams.
 
-Showing the introduction records `seen` under `@3sln/nook:tutorial:v1` in localStorage. This is shared across Nook instances on the same origin. Future visits open directly into the requested view. If storage is denied or throws, a provider-owned, document-scoped in-memory fallback prevents repeated introductions during the current page session. No network requests or account identification are involved.
+The tutorial includes small SVG loops for touch picking, keyboard navigation, and holding then dragging. They use the current theme and run only while the tutorial is visible. Its optional number-key tip appears only when browser-reported layout data is available. The dial shows concise labels where they fit without overlapping. Long labels truncate; captions that cannot fit cleanly are omitted. Alt/Option reveals numbered choices on desktop. Icons never shift when the helper appears. Set `--nook-label-display: none` for an icon-only default.
 
-To replay the first-use experience and its initial attention burst while developing, remove both `@3sln/nook:tutorial:v1` and `@3sln/nook:attention:v1` from localStorage and reload. `dock.open("welcome")` can replay just the tutorial without resetting stored first-use state. The introduction is marked as seen when shown, rather than requiring completion.
+Acknowledging the tutorial records `seen` under `@3sln/nook:tutorial:v1` in localStorage. Merely opening Nook or navigating other views does not mark it seen. The preference is shared across docks on the same origin. If storage is unavailable, a document-scoped memory fallback remembers acknowledgement during the current page session.
+
+To replay the first-use experience and its initial attention burst while developing, remove both `@3sln/nook:tutorial:v1` and `@3sln/nook:attention:v1` from localStorage and reload. `dock.open("welcome")` can replay just the tutorial without resetting stored first-use state. Only acknowledgement records the tutorial as seen; opening it and leaving with Escape keeps the badged choice available.
 
 ### Customizing the tutorial
 
@@ -247,6 +258,7 @@ Customize each dock's headings and button labels through its `tutorial` property
 ```js
 dock.tutorial = {
   title: "Meet your workspace shortcuts",
+  label: "Quick tour",
   continueLabel: "Let's go",
 };
 ```
@@ -263,7 +275,7 @@ Supply direct-child templates for custom content. Desktop and touch wrappers rem
   </template>
   <template slot="tutorial-touch">
     <p>Tap the corner for workspace extras.</p>
-    <p>Swipe sideways for all actions or vertically for settings.</p>
+    <p>Swipe sideways for full menu or vertically for settings.</p>
   </template>
   <template slot="tutorial-drag">Hold, then drag to choose a corner.</template>
 </nook-dock>
@@ -271,9 +283,11 @@ Supply direct-child templates for custom content. Desktop and touch wrappers rem
 
 Slot `tutorial` replaces the entire welcome body and takes precedence over individual device regions. The Continue button remains Nook-owned. With a full replacement, the embedder owns any device-specific content inside it. The drag-region template remains hidden when Nook cannot move.
 
-The library does not include a persistent “How Nook works” entry, help surface, or corner-picker menu. The demo's guide is an ordinary app-authored `nook-panel`; embedders can supply their own help in the same way. Position can be changed through dragging or the dock's `position` property.
+After acknowledgement the built-in tour entry is removed; there is no persistent help or corner-picker menu. The demo's guide is an ordinary app-authored `nook-panel`; embedders can supply their own help in the same way. Position can be changed through dragging or the dock's `position` property.
 
 Templates are cloned once on insertion/replacement. Unrelated mutations and navigation preserve mounted custom content and form state. Replace a template element to apply new content; removing it restores the built-in region. Listeners on inert template nodes are not cloned; use custom elements or bubbling events. Custom content renders in the dock's shadow root, so include a `<style>` in the template or use the exposed parts.
+
+Supply `tutorial-keyboard-graphic`, `tutorial-touch-graphic`, or `tutorial-drag-graphic` templates to replace individual illustrations without replacing the copy. `--nook-tutorial-graphic-width` sets their maximum width (360px by default). The SVGs expose `tutorial-graphic` and their respective graphic parts.
 
 Style `::part(tutorial)`, `::part(tutorial-desktop)`, `::part(tutorial-touch)`, `::part(tutorial-drag)`, and `::part(tutorial-continue)`. The welcome surface also exposes the shared `heading`, `header`, `body`, and `surface` parts. They inherit Nook's color, typography, spacing, and animation tokens.
 
@@ -347,9 +361,44 @@ Search results, bindings, command availability, and argument definitions update 
 
 Additional parts: `command-search`, `command-list`, `command-empty`, `command-result`, `command-name`, `command-description`, `command-keybind`, `command-status`, `command-form`, `command-fields`, `command-field`, `command-arg-label`, `command-arg-control`, `command-run`, `number`, `tutorial`, and `tutorial-continue`. Set `--nook-command-width` (default `480px`) to customize the desktop palette width.
 
+## Items and commands
+
+Commands declare reusable operations. Items declare where a choice appears. Submenus remain `nook-menu` containers, and controls remain `nook-setting` elements.
+
+```html
+<nook-command
+  id="save"
+  name="Save changes"
+  description="Save the current draft"
+  keybind="Alt+S"
+></nook-command>
+<nook-menu label="File">
+  <nook-item command="save"></nook-item>
+  <nook-item id="custom-flow" label="Custom workflow"></nook-item>
+</nook-menu>
+```
+
+`command` is a command ID within the same dock; `item.command` reflects that attribute. A linked item inherits the command's name, icon, and shortcut unless it supplies its own label or icon. The command owns the keybinding: an item's own `keybind` is ignored when it references a command, and new standalone items do not register shortcuts. Legacy standalone `nook-action` definitions retain their old bindings.
+
+Selecting a new item first emits cancelable `nook-select` with `{ source, id, command, context }`. `command` is the resolved element or `null` for a custom item. Call `preventDefault()` to handle selection yourself. Otherwise a linked item enters the same command argument form used by the palette, or executes a command without arguments. Multiple items share one form and one execution path. Shortcuts invoke the command directly without selecting a particular item.
+
+```js
+dock.addEventListener("nook-select", (event) => {
+  if (event.detail.id === "custom-flow") {
+    event.preventDefault();
+    // Open an app-owned flow. The app decides when to close Nook.
+  }
+});
+dock.addEventListener("nook-command", (event) => {
+  if (event.detail.id === "save") saveDraft();
+});
+```
+
+Missing, invalid, hidden, or disabled referenced commands withdraw their items from the menu. Labels, icons, shortcuts, references, and command availability update live. Existing `nook-action` declarations can reference commands too; they keep their cancelable `nook-action` hook before invocation. No network requests or operation implementations are supplied by Nook.
+
 ## Compact and expanded views
 
-Small menus float without a surrounding card on desktop and mobile. Root views stay compact within their configured row capacity; submenu views through four; settings stay compact through three controls. The root shows only its items. Floating actions share one restrained frosted surface for contrast over app content.
+The root is a compact icon arc on desktop and mobile, with individually surfaced choices. Other small menus float without a surrounding card; submenu views through four; settings stay compact through three controls. The root shows only its items. Floating nested menus share one restrained frosted surface for contrast over app content.
 
 Larger views use a contained card on desktop. On touch/coarse-pointer or hoverless devices they fill the viewport over a blurred, tinted backdrop, with safe-area padding, a close/back header, and scrollable content. Adding/removing definitions updates presentation live without remounting their UI. Arbitrary panels and the first-use tutorial default to expanded presentation because their content size is not implied by an item count.
 
@@ -367,7 +416,7 @@ Customize floating control backgrounds with `--nook-floating-background`; custom
 const dock = document.querySelector("nook-dock");
 dock.context = { route: location.pathname, documentId: "current-document" };
 
-dock.addEventListener("nook-action", (event) => {
+dock.addEventListener("nook-select", (event) => {
   const { source, id, context } = event.detail;
   // Translate intent into your application's Actions here.
   // event.preventDefault() keeps Nook open for this action.
@@ -394,7 +443,7 @@ For a custom setting, supply `<template slot="control">…</template>`. Its nati
 
 Tap/click opens the root menu, with action icons. The device-specific introduction is shown on first use. Touch/coarse-pointer or hoverless devices hide keyboard hints and show swipe instructions instead. These capability queries update live when browser emulation or input capabilities change. Clicking outside closes it. Hold for 450ms, then drag. The live handle stays anchored and dims while a non-interactive preview shows the destination corner; release commits that corner. Cancellation restores the original placement. The mark rotates to match each corner. The handle has a 48px touch target and a 32px visible corner with the same recognizable quarter-circle shape.
 
-On touch devices (and pointer-based testing), swipe horizontally or diagonally for All actions, and vertically for settings. Swipes have a 32px distance threshold and broad directional bands. Empty surfaces do not activate from gestures or shortcuts. Gestures start only on the handle, leaving application scrolling alone. More is the overflow launcher in the root menu; swipes show the complete All actions list.
+Fast swipes open Full menu horizontally or diagonally and Settings vertically. A slower held swipe reveals the same root dial used by tapping. Swipes have a 32px distance threshold and broad directional bands. Empty surfaces do not activate from gestures or shortcuts. Gestures start only on the handle, leaving application scrolling alone. Release directly on a dial choice to choose it; releasing elsewhere cancels. Extra choices never receive directional swipe bindings.
 
 | Desktop action  | Default       | Dock attribute     |
 | --------------- | ------------- | ------------------ |
@@ -407,7 +456,7 @@ On touch devices (and pointer-based testing), swipe horizontally or diagonally f
 
 Designate the feedback action/panel with `feedback`. The first available designated item wins. Any action, panel, or submenu, including a root item, may also declare `keybind` or set `.keybind`. Bindings use `Ctrl`, `Alt`, `Meta`, `Shift` plus `KeyboardEvent.key`, for example `Meta+Shift+K`. Modifiers must match exactly. Set an empty dock binding attribute to disable that default. Dock defaults take precedence over item bindings; otherwise the first available item in DOM order wins. Browser/OS-reserved bindings may not reach the page.
 
-Shortcuts ignore editable elements, composition, repeated presses, and already-prevented events. Inside a menu, arrows cycle focus, Home/End jump, Enter/Space activate buttons, and Alt/Option+1–9 chooses the corresponding displayed action. Hold Alt/Option to reveal assigned numbers alongside item labels in readable inline rows; release it or leave the window to hide them. Plain number keys never activate items. Tab cycles within the current surface. Escape closes the entire menu and clears navigation; reopening starts at the root. Backspace (the Mac Delete key) goes back one level. Backspace/Delete retains normal editing behavior in text fields. Native editing keys retain their behavior inside controls. Focus returns to the element that opened the menu. Reduced-motion preferences disable animation.
+Shortcuts ignore editable elements, composition, repeated presses, and already-prevented events. Inside a menu, arrows cycle focus, Home/End jump, Enter/Space activate buttons, and Alt/Option+1–9 chooses the corresponding displayed action. Hold Alt/Option to reveal assigned numbers alongside item labels without moving the root arc; other icon menus use readable inline rows; release it or leave the window to hide them. Plain number keys never activate items. Tab cycles within the current surface. Escape closes the entire menu and clears navigation; reopening starts at the root. Backspace (the Mac Delete key) goes back one level. Backspace/Delete retains normal editing behavior in text fields. Native editing keys retain their behavior inside controls. Focus returns to the element that opened the menu. Reduced-motion preferences disable animation.
 
 ```js
 dock.open(); // root
@@ -472,7 +521,7 @@ nook-dock {
   --nook-font: system-ui, sans-serif;
   --nook-width: 304px;
   --nook-overflow-width: 360px;
-  --nook-root-max-items: 5;
+  --nook-root-max-items: 6;
   --nook-z: 10000;
   --nook-label-display: none;
   --nook-padding: 16px;
@@ -492,11 +541,11 @@ nook-dock::part(control) {
 }
 ```
 
-Exposed parts: `handle-tooltip`, `handle-shortcut`, `drag-hint`, `landing-zone`, `landing-outline`, `drag-preview`, `preview-handle`, `preview-mark`, `anchor`, `handle`, `mark`, `announcement`, `surface`, `header`, `back`, `heading`, `close`, `body`, `items`, `item`, `icon`, `item-label`, `tooltip`, `tooltip-text`, `setting`, `setting-label`, `description`, `control`, `content`, `groups`, `group`, `group-heading`, and `group-body`. The handle's quarter-circle background is a pseudo-element; customize its color with `--nook-accent` or the handle itself with `::part(handle)`. Inner geometry can be overridden by styling parts. Nook's inline SVG mark remains constant.
+Exposed parts: `handle-tooltip`, `handle-shortcut`, `drag-hint`, `landing-zone`, `landing-outline`, `drag-preview`, `preview-handle`, `preview-mark`, `anchor`, `handle`, `mark`, `announcement`, `surface`, `header`, `back`, `heading`, `close`, `body`, `items`, `item`, `icon`, `item-label`, `tooltip`, `tooltip-text`, `dial-caption`, `tutorial-badge`, `setting`, `setting-label`, `description`, `control`, `content`, `groups`, `group`, `group-heading`, and `group-body`. The handle's quarter-circle background is a pseudo-element; customize its color with `--nook-accent` or the handle itself with `::part(handle)`. Inner geometry can be overridden by styling parts. Nook's inline SVG mark remains constant.
 
 The surface is fixed-position and uses a configurable z-index. Mount the dock near the document root, outside transformed/clipping ancestors. This version does not use the browser top layer; a host modal in the top layer can cover it.
 
-Overflow exposes `overflow-groups`, `overflow-group`, `overflow-group-heading`, and `overflow-group-body` parts alongside the standard item parts. `--nook-overflow-width` controls its desktop width; `--nook-keyboard-width` controls the temporary labeled width of icon menus while Alt/Option is held. More and the command palette keep their own widths.
+Overflow exposes `overflow-groups`, `overflow-group`, `overflow-group-heading`, and `overflow-group-body` parts alongside the standard item parts. `--nook-overflow-width` controls its desktop width; `--nook-keyboard-width` controls temporary labeled layouts in nested icon menus. The root arc keeps its position and size while Alt/Option labels appear.
 
 Typography uses a shared hierarchy: 16px semibold headings, 14px primary text and command names, 13px control labels, and 12px descriptions/captions. Headings have a tighter line height; supporting text uses more breathing room and starts at the same inline edge. Fine print stays at 12px, and touch text inputs keep their 16px minimum. Customize `--nook-font`, `--nook-text-xs`, `--nook-text-sm`, `--nook-text-md`, `--nook-text-lg`, `--nook-line-height`, `--nook-heading-weight`, and `--nook-label-weight` to change the hierarchy consistently. `--nook-invite-cycle` (2s) and `--nook-invite-delay` (200ms) style the attention burst; the six-second budget and randomized cooldown are owned by the onboarding provider.
 
@@ -582,7 +631,7 @@ A dock containing only Nook definitions anchors to the viewport. To anchor withi
 <header>App bar</header>
 <nook-dock style="--nook-handle-z: 20; --nook-overlay-z: 1000">
   <main><!-- Existing application, rendered through a slot --></main>
-  <nook-action label="Share"></nook-action>
+  <nook-item label="Share"></nook-item>
 </nook-dock>
 <footer>Bottom bar</footer>
 ```
@@ -600,7 +649,7 @@ dock.localization = {
     nook: {
       Settings: "Ajustes",
       More: "Más",
-      "All actions": "Todas las acciones",
+      "Full menu": "Todas las acciones",
       "Search commands": "Buscar comandos",
       "{#} snapshots": "{#} capturas",
       "{#} snapshot": "{#} captura",
@@ -613,4 +662,4 @@ Without an explicit locale, Nook follows its `lang` attribute, then the document
 
 ### Held swipe dial
 
-Fast horizontal and diagonal swipes open **All actions**, including items already visible in the root menu; vertical swipes open settings. Hold a swipe outside Nook briefly to reveal a dial with Settings and All actions, then release directly on a choice. Releasing anywhere else cancels. Its opacity follows distance from Nook. A clear inner gap separates options from the handle; moving back inside that area cancels selection. Long-pressing before moving continues to drag the handle. Dial parts are `swipe-dial`, `swipe-dial-option`, `swipe-dial-icon`, and `swipe-dial-label`. `dock.open("all")` opens the complete list programmatically.
+Fast horizontal and diagonal swipes open **Full menu**, including items already visible in the root menu; vertical swipes open settings. Hold a swipe outside Nook briefly to reveal the same root dial, with Settings, Full menu, and up to four prioritized extras, then release directly on a choice. Releasing anywhere else cancels. Its opacity follows distance from Nook. A clear inner gap separates options from the handle; moving back inside that area cancels selection. Long-pressing before moving continues to drag the handle. Dial parts are `swipe-dial`, `swipe-dial-option`, `swipe-dial-icon`, and `swipe-dial-label`. `dock.open("all")` opens the complete list programmatically.

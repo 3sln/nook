@@ -1,4 +1,5 @@
-import swipeDial from "./ui/swipeDial.js";
+import { tutorialGraphic } from "./ui/tutorialGraphics.js";
+import swipeDial, { directionalChoice } from "./ui/swipeDial.js";
 import bounds, { hasAppContent } from "./ui/bounds.js";
 import localization from "./ui/localization.js";
 import feedbackUI from "./ui/feedback.js";
@@ -28,7 +29,8 @@ import {
 import styles from "./ui/styles.js";
 
 const mark = icon("nook");
-const tags = "nook-action,nook-menu,nook-panel,nook-setting,nook-command";
+const tags =
+  "nook-item,nook-action,nook-menu,nook-panel,nook-setting,nook-command";
 const make = (tag, part, text) => {
   const node = document.createElement(tag);
   if (part) node.setAttribute("part", part);
@@ -54,9 +56,36 @@ const slotText = (item, slot) => {
       : node?.textContent
   )?.trim();
 };
+const isLeaf = (item) => ["nook-item", "nook-action"].includes(item.localName);
+const commandTarget = (item) => {
+  if (!isLeaf(item) || !item.hasAttribute("command")) return null;
+  const dock = item.closest("nook-dock"),
+    id = item.getAttribute("command")?.trim();
+  if (!dock || !id) return null;
+  return (
+    [...dock.querySelectorAll("nook-command")].find(
+      (command) => command.id === id && command.closest("nook-dock") === dock,
+    ) || null
+  );
+};
+const iconSlot = (item) =>
+  childSlot(item, "icon") ||
+  (commandTarget(item) && childSlot(commandTarget(item), "icon"));
 const label = (item) =>
-  item.getAttribute("label") || slotText(item, "label") || "Untitled";
-const available = (item) => !item.closest("[hidden],[disabled],template");
+  item.getAttribute("label") ||
+  slotText(item, "label") ||
+  commandTarget(item)?.getAttribute("name") ||
+  "Untitled";
+const available = (item) => {
+  if (item.closest("[hidden],[disabled],template")) return false;
+  if (!isLeaf(item) || !item.hasAttribute("command")) return true;
+  const command = commandTarget(item);
+  return Boolean(
+    command &&
+      validCommand(command) &&
+      !command.closest("[hidden],[disabled],template"),
+  );
+};
 
 export class NookItem extends HTMLElement {
   constructor() {
@@ -84,7 +113,18 @@ export class NookItem extends HTMLElement {
   set root(value) {
     this.toggleAttribute("root", Boolean(value));
   }
+  get command() {
+    return this.getAttribute("command") || "";
+  }
+  set command(value) {
+    if (value == null || value === "") this.removeAttribute("command");
+    else this.setAttribute("command", String(value));
+  }
   get keybind() {
+    if (isLeaf(this) && this.hasAttribute("command"))
+      return commandTarget(this)?.getAttribute("keybind") || "";
+    // Legacy actions retain their old binding; new items put bindings on commands.
+    if (this.localName === "nook-item") return "";
     return this.getAttribute("keybind") || "";
   }
   set keybind(value) {
@@ -236,6 +276,7 @@ export class NookDock extends HTMLElement {
     });
   }
   connectedCallback() {
+    this.queryReady = false;
     this.syncLayers();
     this.layerObserver.observe(this.anchor, {
       attributes: true,
@@ -415,6 +456,8 @@ export class NookDock extends HTMLElement {
     );
   }
   disconnectedCallback() {
+    this.queryReady = false;
+    this.pendingIntents = [];
     this.layerObserver.disconnect();
     this.altHeld = false;
     this.anchor.removeAttribute("data-alt-held");
@@ -649,6 +692,10 @@ export class NookDock extends HTMLElement {
     }
   }
   send(detail) {
+    if (this.isConnected && !this.queryReady) {
+      (this.pendingIntents ??= []).push(detail);
+      return;
+    }
     this.intents.dispatchEvent(new CustomEvent("intent", { detail }));
   }
   open(view = "root") {
@@ -695,10 +742,10 @@ export class NookDock extends HTMLElement {
     for (const [id, title] of [
       ["root", "Nook"],
       ["full", "More"],
-      ["all", "All actions"],
+      ["all", "Full menu"],
       ["settings", "Quick settings"],
       ["commands", "Commands"],
-      ["welcome", "Welcome to Nook"],
+      ["welcome", "Quick tour"],
       ["feedback", "Feedback"],
     ])
       this.view(id, title);
@@ -719,45 +766,38 @@ export class NookDock extends HTMLElement {
     copy.className = "tutorial";
     const keyboard = this.make("div", "tutorial-desktop");
     keyboard.className = "keyboard-only";
-    const lead = this.make("p");
-    lead.append(
-      this.make("strong", null, "A small corner for useful extras."),
-      document.createTextNode(" "),
-      this.make(
-        "span",
-        null,
-        "Click Nook to find actions, settings, and help for this page.",
-      ),
+    const lead = this.make(
+      "p",
+      null,
+      "Arrows move; Enter selects. Backspace goes back; Esc closes.",
     );
     const numberTip = this.make(
       "p",
       null,
-      "Hold Alt / Option to reveal numbered shortcuts.",
+      "Hold Alt / Option for labels and numbers.",
     );
     numberTip.className = "layout-hint";
-    keyboard.append(
-      lead,
-      this.make(
-        "p",
-        null,
-        "Use arrows to move and Enter to choose. Backspace goes back; Escape closes the menu.",
-      ),
-      numberTip,
+    const keyboardGraphic = tutorialGraphic(this.make, "keyboard");
+    this.i18n.text(
+      keyboardGraphic.querySelector(".tutorial-enter-label"),
+      "Enter",
     );
+    keyboard.append(keyboardGraphic, lead, numberTip);
     const touch = this.make("div", "tutorial-touch");
     touch.className = "touch-only";
-    const touchLead = this.make("p");
-    touchLead.append(
-      this.make("strong", null, "Your extras, within reach."),
-      document.createTextNode(" "),
-      this.make("span", null, "Tap Nook for actions, settings, and help."),
+    const touchLead = this.make(
+      "p",
+      null,
+      "Tap to open. Swipe sideways for the full menu or vertically for settings.",
     );
+    const touchGraphic = tutorialGraphic(this.make, "touch");
     touch.append(
+      touchGraphic,
       touchLead,
       this.make(
         "p",
         null,
-        "When available, swipe sideways or diagonally for all actions, or up or down for settings.",
+        "Hold a swipe to pick. Release elsewhere to cancel.",
       ),
     );
     const welcomeMove = this.make(
@@ -766,7 +806,8 @@ export class NookDock extends HTMLElement {
       "Hold Nook, then drag to move it.",
     );
     welcomeMove.setAttribute("part", "drag-hint tutorial-drag");
-    copy.append(keyboard, touch, welcomeMove);
+    const dragGraphic = tutorialGraphic(this.make, "drag");
+    copy.append(keyboard, touch, welcomeMove, dragGraphic);
     const done = this.make("button", "tutorial-continue", "Got it");
     done.className = "command-run";
     done.onclick = () => {
@@ -791,6 +832,9 @@ export class NookDock extends HTMLElement {
         ["tutorial-desktop", keyboard],
         ["tutorial-touch", touch],
         ["tutorial-drag", welcomeMove],
+        ["tutorial-keyboard-graphic", keyboardGraphic],
+        ["tutorial-touch-graphic", touchGraphic],
+        ["tutorial-drag-graphic", dragGraphic],
       ].map(([name, element]) => ({
         name,
         element,
@@ -802,12 +846,21 @@ export class NookDock extends HTMLElement {
     for (const [id, title, iconText] of [
       ["feedback", "Feedback", icon("feedback")],
       ["quick", "More", icon("more")],
+      ["all", "Full menu", icon("menu")],
+      ["welcome", "Quick tour", icon("guide")],
       ["settings", "Settings", icon("settings")],
       ["commands", "Commands", icon("commands")],
     ]) {
       const b = this.itemButton(null, title, iconText);
       b.onclick = () =>
         this.send({ type: "enter", view: id === "quick" ? "full" : id });
+      if (id === "welcome") {
+        const badge = this.make("span", "tutorial-badge");
+        badge.className = "tutorial-badge";
+        badge.setAttribute("aria-hidden", "true");
+        b.append(badge);
+        this.i18n.attr(b, "aria-description", "New: learn how to use Nook.");
+      }
       this.builtins.set(id, b);
       root.grid.append(b);
     }
@@ -823,13 +876,17 @@ export class NookDock extends HTMLElement {
         bindingSupported(binding, this.browserKeyboardLayout),
     });
   }
-  itemButton(item, title, iconText = icon("file")) {
+  itemButton(
+    item,
+    title,
+    iconText = icon(item && commandTarget(item) ? "commands" : "file"),
+  ) {
     const button = this.make("button", "item");
     button.className = "item";
     button.type = "button";
     const icon = this.make("span", "icon");
     icon.className = "icon";
-    const template = item && childSlot(item, "icon");
+    const template = item && iconSlot(item);
     if (template)
       icon.append(
         template instanceof HTMLTemplateElement
@@ -866,9 +923,14 @@ export class NookDock extends HTMLElement {
     const ui = this.tutorialUI;
     if (!ui) return;
     const options = this.tutorial || {};
-    for (const [view, title] of [
-      [ui.welcome, options.title ?? "Welcome to Nook"],
-    ]) {
+    const guide = this.builtins?.get("welcome");
+    if (guide) {
+      const title = options.label ?? "Quick tour";
+      this.i18n.attr(guide, "aria-label", title);
+      this.i18n.text(guide.querySelector(".item-label"), title);
+      this.i18n.text(guide.querySelector(".tooltip-text"), title);
+    }
+    for (const [view, title] of [[ui.welcome, options.title ?? "Quick tour"]]) {
       this.i18n.text(view.heading, title);
       this.i18n.attr(view.el, "aria-label", title);
     }
@@ -939,7 +1001,7 @@ export class NookDock extends HTMLElement {
       const topLevel = this.topLevelItems.includes(item);
       const destinations =
         item.localName === "nook-setting"
-          ? [root ? "root" : "settings"]
+          ? ["settings"]
           : topLevel
             ? [this.rootItems.includes(item) ? "root" : "full"]
             : parent && this.records.has(parent)
@@ -987,7 +1049,7 @@ export class NookDock extends HTMLElement {
         "|" +
         item.keybind +
         "|" +
-        childSlot(item, "icon")?.outerHTML +
+        iconSlot(item)?.outerHTML +
         "|" +
         bindingSupported(item.keybind, this.browserKeyboardLayout);
       if (record.signature !== signature) {
@@ -1081,9 +1143,9 @@ export class NookDock extends HTMLElement {
     this.feedbackUI?.setEnabled(feedbackEnabled);
     this.feedbackUI?.reconcile();
     if (!feedbackEnabled && this.state?.path.includes("feedback")) this.close();
-    this.builtins.get("quick").hidden = !this.overflowEntries.length;
+    this.builtins.get("quick").hidden = true;
     const commands = items.filter((item) => item.localName === "nook-command");
-    for (const id of ["feedback", "settings", "commands"])
+    for (const id of ["feedback", "settings", "commands", "all", "welcome"])
       this.builtins.get(id).hidden = !this.rootEntries.some(
         (entry) => entry.id === id,
       );
@@ -1123,9 +1185,8 @@ export class NookDock extends HTMLElement {
                 : `${id}-presentation`,
             )
           : id.getAttribute("presentation");
-      view.presentation = presentation(kind, count, override);
-      if (id === "root" && !["compact", "expanded"].includes(override))
-        view.presentation = count > this.rootCapacity ? "expanded" : "compact";
+      view.presentation =
+        id === "root" ? "compact" : presentation(kind, count, override);
       if (view.grid && id !== "full" && id !== "all") {
         const labelsVisible = id !== "root" || view.presentation === "expanded";
         view.el.dataset.layout =
@@ -1169,39 +1230,18 @@ export class NookDock extends HTMLElement {
             this.state.path.at(-1) === focusedView &&
             this.shadowRoot.activeElement === focused
           )
-            (focusedView === "root" && !this.builtins.get("quick").hidden
-              ? this.builtins.get("quick")
-              : this.focusables()[0]
-            )?.focus();
+            this.focusables()[0]?.focus();
         });
       }
     }
   }
   planItems(items) {
-    const style = this.ownerDocument.defaultView.getComputedStyle(
-      this.rootMeasure,
-    );
-    const size = parseFloat(style.width) || 48;
-    const measuredGap = parseFloat(style.marginInlineEnd);
-    const gap = Number.isFinite(measuredGap) ? measuredGap : 8;
+    const style = this.ownerDocument.defaultView.getComputedStyle(this);
     this.rootCapacity = Math.max(
-      1,
+      2,
       Math.min(
-        Math.max(
-          1,
-          parseInt(style.getPropertyValue("--nook-root-max-items"), 10) || 5,
-        ),
-        Math.floor(
-          ((this.anchorRect?.width ??
-            this.ownerDocument.defaultView.innerWidth) -
-            (this.position === "left-center" || this.position === "right-center"
-              ? (parseFloat(style.marginBlockStart) || 56) +
-                (parseFloat(style.marginBlockEnd) || 12) +
-                16
-              : 32) +
-            gap) /
-            (size + gap),
-        ),
+        6,
+        parseInt(style.getPropertyValue("--nook-root-max-items"), 10) || 6,
       ),
     );
     this.topLevelItems = items.filter(
@@ -1218,7 +1258,7 @@ export class NookDock extends HTMLElement {
       this.availableBuiltins.add("feedback");
     if (
       this.settingsHref ||
-      items.some((item) => item.localName === "nook-setting" && !item.root)
+      items.some((item) => item.localName === "nook-setting")
     )
       this.availableBuiltins.add("settings");
     if (items.some((item) => item.localName === "nook-command"))
@@ -1245,32 +1285,36 @@ export class NookDock extends HTMLElement {
         .filter((id) => this.availableBuiltins.has(id))
         .map((id) => builtin(id, id === "settings" ? 20 : 10)),
     ];
-    const pinnedSettings = items.filter(
-      (item) => item.localName === "nook-setting" && item.root,
-    ).length;
-    const plan = distributeItems(
-      entries,
-      Math.max(1, this.rootCapacity - pinnedSettings),
-    );
+    const tour = this.state?.needsIntro
+      ? [{ id: "welcome", priority: Number.MAX_SAFE_INTEGER, group: "" }]
+      : [];
     this.allEntries = distributeItems(
-      [
-        ...entries,
-        ...items
-          .filter((item) => item.localName === "nook-setting" && item.root)
-          .map((item) => ({
-            id: item,
-            priority: item.priority,
-            group: item.group.trim(),
-          })),
-      ],
+      [...tour, ...entries],
       Number.MAX_SAFE_INTEGER,
     ).root;
-    this.rootEntries = plan.root;
-    this.overflowEntries = plan.overflow;
-    this.rootItems = plan.root
+    if (this.allEntries.length) this.availableBuiltins.add("all");
+    if (this.state?.needsIntro) this.availableBuiltins.add("welcome");
+    const reserved = [
+      ...(this.allEntries.length
+        ? [{ id: "all", priority: 0, group: "" }]
+        : []),
+      ...(this.availableBuiltins.has("settings")
+        ? [builtin("settings", 20)]
+        : []),
+    ];
+    const extras = this.allEntries.filter((entry) => entry.id !== "settings");
+    this.rootEntries = [
+      ...reserved,
+      ...extras.slice(0, Math.min(4, this.rootCapacity - reserved.length)),
+    ];
+    const picked = new Set(this.rootEntries.map((entry) => entry.id));
+    this.overflowEntries = this.allEntries.filter(
+      (entry) => !picked.has(entry.id),
+    );
+    this.rootItems = this.rootEntries
       .map((entry) => entry.id)
       .filter((id) => typeof id !== "string");
-    this.overflowItems = plan.overflow
+    this.overflowItems = this.overflowEntries
       .map((entry) => entry.id)
       .filter((id) => typeof id !== "string");
   }
@@ -1292,7 +1336,8 @@ export class NookDock extends HTMLElement {
     // Only launch buttons are mirrored. Panels and setting controls have one
     // mounted instance, even when a menu is projected as nested sections.
     for (const [id, view] of this.views) {
-      if (!view.grid || id === "full" || id === "all") continue;
+      if (!view.grid || id === "root" || id === "full" || id === "all")
+        continue;
       if (!view.grouped) {
         view.grouped = this.make("div", "groups");
         view.grouped.className = "groups";
@@ -1454,11 +1499,12 @@ export class NookDock extends HTMLElement {
         const source = typeof entry.id === "string" ? null : entry.id;
         const title = source
           ? label(source)
-          : entry.id === "feedback"
-            ? "Feedback"
-            : entry.id === "commands"
-              ? "Commands"
-              : "Settings";
+          : {
+              feedback: "Feedback",
+              commands: "Commands",
+              settings: "Settings",
+              welcome: this.tutorial?.label ?? "Quick tour",
+            }[entry.id];
         const signature = source ? this.records.get(source).signature : title;
         let record = view.overflowButtons.get(entry.id);
         if (!record) {
@@ -1466,16 +1512,21 @@ export class NookDock extends HTMLElement {
             source,
             title,
             icon(
-              entry.id === "feedback"
-                ? "feedback"
-                : entry.id === "commands"
+              source
+                ? commandTarget(source)
                   ? "commands"
-                  : "settings",
+                  : "file"
+                : {
+                    feedback: "feedback",
+                    commands: "commands",
+                    settings: "settings",
+                    welcome: "guide",
+                  }[entry.id],
             ),
           );
           button.onclick = () => {
             if (source?.localName === "nook-setting") {
-              this.open("root");
+              this.open("settings");
               queueMicrotask(() => source._control?.focus());
             } else if (source) this.activate(source);
             else this.builtins.get(entry.id).click();
@@ -1648,22 +1699,41 @@ export class NookDock extends HTMLElement {
       this.chooseCommand(item);
       return;
     }
-    if (item.localName === "nook-menu" || item.localName === "nook-panel")
+    if (item.localName === "nook-menu" || item.localName === "nook-panel") {
       this.send({ type: "enter", view: item });
-    else if (
-      emit(item, "nook-action", {
-        source: item,
-        id: item.id,
-        context: this.context,
-      })
-    )
-      this.close();
+      return;
+    }
+    const command = commandTarget(item);
+    if (
+      emit(
+        item,
+        item.localName === "nook-item" ? "nook-select" : "nook-action",
+        {
+          source: item,
+          id: item.id,
+          command,
+          context: this.context,
+        },
+      )
+    ) {
+      if (command) this.chooseCommand(command);
+      else this.close();
+    }
   }
+
   project(state, focus = true) {
     const previousCorner = this.state?.corner;
     const previousPreferred = this.state?.preferredPosition;
     const previous = this.state?.path.at(-1);
+    const previousNeedsIntro = this.state?.needsIntro;
     this.state = state;
+    this.queryReady = true;
+    if (this.pendingIntents?.length) {
+      const pending = this.pendingIntents.splice(0);
+      queueMicrotask(() => {
+        if (this.isConnected) for (const detail of pending) this.send(detail);
+      });
+    }
     const movable = this.canDrag();
     this.anchor.dataset.draggable = String(movable);
     if (
@@ -1698,7 +1768,7 @@ export class NookDock extends HTMLElement {
       (id) => this.views.get(id)?.presentation || "compact",
     );
     for (const [id, view] of this.views) {
-      const visible = id === active;
+      const visible = id === active || (id === "root" && this.swipeDial?.shown);
       view.el.dataset.presentation = visible
         ? effective
         : view.presentation || "compact";
@@ -1748,6 +1818,7 @@ export class NookDock extends HTMLElement {
       view.picker?.syncOpen(visible);
       view.back.hidden = state.path.length <= 1;
     }
+    this.swipeDial?.sync();
     if (!active) delete this.anchor.dataset.numbering;
     if (active && this.anchor.dataset.numbering) this.showNumbers();
     this.handle.setAttribute("aria-expanded", String(Boolean(active)));
@@ -1776,6 +1847,7 @@ export class NookDock extends HTMLElement {
         ).focus();
       }
     }
+    if (previousNeedsIntro !== state.needsIntro) this.reconcile();
     if (previousCorner && previousCorner !== state.corner) {
       this.settleCorner();
       emit(this, "nook-corner-change", { corner: state.corner });
@@ -1796,7 +1868,7 @@ export class NookDock extends HTMLElement {
   }
   focusables() {
     const view = this.views.get(this.state?.path.at(-1));
-    return view
+    const nodes = view
       ? [
           ...view.el.querySelectorAll(
             "button,input,select,textarea,a[href],[tabindex]",
@@ -1805,8 +1877,17 @@ export class NookDock extends HTMLElement {
           (n) => !n.disabled && n.tabIndex >= 0 && n.getClientRects().length,
         )
       : [];
+    return this.state?.path.at(-1) === "root"
+      ? nodes.sort(
+          (a, b) => Number(a.dataset.dialOrder) - Number(b.dataset.dialOrder),
+        )
+      : nodes;
   }
   numberedItems() {
+    if (this.state?.path.at(-1) === "root")
+      return this.focusables()
+        .filter((node) => node.classList.contains("item"))
+        .slice(0, 9);
     const view = this.views.get(this.state?.path.at(-1));
     return view
       ? [...view.body.querySelectorAll(".item,.command-result")]
@@ -1947,7 +2028,10 @@ export class NookDock extends HTMLElement {
         return;
       }
       for (const item of this.records.keys())
-        if (bindingMatches(item.keybind)) {
+        if (
+          !(isLeaf(item) && item.hasAttribute("command")) &&
+          bindingMatches(item.keybind)
+        ) {
           e.preventDefault();
           this.activate(item);
           return;
@@ -1976,6 +2060,10 @@ export class NookDock extends HTMLElement {
       ].includes(e.key)
     ) {
       e.preventDefault();
+      if (this.state.path.at(-1) === "root" && e.key.startsWith("Arrow")) {
+        directionalChoice(nodes, current, e.key)?.focus();
+        return;
+      }
       const next =
         e.key === "Home"
           ? 0
@@ -2100,8 +2188,19 @@ export class NookDock extends HTMLElement {
         ? this.swipeDial.release(e.clientX, e.clientY)
         : view;
       if (view || p.swipeStarted || dialShown) this.suppressClick = true;
-      if (destination && this.surfaceAvailable(destination))
-        this.open(destination);
+      this.cancelPointer();
+      if (
+        typeof destination === "string" &&
+        this.surfaceAvailable(destination)
+      ) {
+        if (dialShown) {
+          this.open("root");
+          this.send({ type: "enter", view: destination });
+        } else this.open(destination);
+      } else if (destination && this.records.has(destination)) {
+        if (dialShown) this.open("root");
+        this.activate(destination);
+      } else if (dialShown) this.close();
     }
     this.cancelPointer();
   }
@@ -2122,6 +2221,7 @@ export class NookDock extends HTMLElement {
 
 export function defineNook(registry = customElements) {
   for (const tag of [
+    "nook-item",
     "nook-action",
     "nook-menu",
     "nook-setting",

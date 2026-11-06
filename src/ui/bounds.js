@@ -1,4 +1,5 @@
 const definitions = new Set([
+  "nook-item",
   "nook-action",
   "nook-setting",
   "nook-menu",

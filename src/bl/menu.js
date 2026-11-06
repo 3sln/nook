@@ -148,6 +148,7 @@ export function transition(state, intent) {
       return {
         ...state,
         path: [intent.view || state.introTarget || "root"],
+        needsIntro: false,
         introTarget: null,
       };
     case "configure-positions": {
@@ -233,13 +234,15 @@ export class MenuState extends Query {
     });
     const receive = (event) => {
       let intent = event.detail;
-      if (state.needsIntro && ["open", "enter"].includes(intent.type)) {
-        // Another tab or Nook instance may have shown the guide since boot.
-        if (onboarding.hasSeen()) state = { ...state, needsIntro: false };
-        else {
-          onboarding.markSeen();
-          intent = { type: "introduce", view: intent.view };
-        }
+      if (state.needsIntro && onboarding.hasSeen())
+        state = { ...state, needsIntro: false };
+      if (state.needsIntro && ["open", "enter"].includes(intent.type))
+        onboarding.acknowledgeAttention?.();
+      if (["finish-intro", "dismiss-intro"].includes(intent.type)) {
+        state = { ...state, needsIntro: false };
+        onboarding.markSeen();
+        if (intent.type === "dismiss-intro")
+          intent = { type: "finish-intro", view: "root" };
       }
       state = transition(state, intent);
       notify(state);

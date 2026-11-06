@@ -338,15 +338,15 @@
       <aside class="demo-controls" aria-label="Demo controls">
         <h2>Try a view</h2>
         <div class="demo-buttons">
-          <button data-view="all">Open all actions</button>
+          <button data-view="all">Open full menu</button>
           <button data-view="settings">Open settings</button>
           <button data-view="commands">Open commands</button>
           <button data-view="feedback">Open feedback</button>
         </div>
         <button id="dynamic" aria-pressed="false">Add contextual action</button>
         <p style="margin-top: 12px">
-          Add or remove an action while a menu is open. Resources contains
-          nested menus; Export has a longer list.
+          Add or remove an action while a menu is open. Full menu holds the full
+          list; Resources contains nested menus.
         </p>
         <div class="demo-status">
           <p id="anchor-status"></p>
@@ -505,7 +505,7 @@
           >
             <use href="#nook-icon-download"></use></svg
         ></template>
-        <nook-action id="export-pdf" label="PDF"
+        <nook-item id="export-pdf" label="PDF"
           ><template slot="icon"
             ><svg
               viewBox="0 0 24 24"
@@ -517,8 +517,8 @@
               aria-hidden="true"
             >
               <use href="#nook-icon-file"></use></svg></template
-        ></nook-action>
-        <nook-action id="export-markdown" label="Markdown"
+        ></nook-item>
+        <nook-item id="export-markdown" label="Markdown"
           ><template slot="icon"
             ><svg
               viewBox="0 0 24 24"
@@ -530,8 +530,8 @@
               aria-hidden="true"
             >
               <use href="#nook-icon-text"></use></svg></template
-        ></nook-action>
-        <nook-action id="export-text" label="Plain text"
+        ></nook-item>
+        <nook-item id="export-text" label="Plain text"
           ><template slot="icon"
             ><svg
               viewBox="0 0 24 24"
@@ -543,8 +543,8 @@
               aria-hidden="true"
             >
               <use href="#nook-icon-file"></use></svg></template
-        ></nook-action>
-        <nook-action id="export-html" label="HTML"
+        ></nook-item>
+        <nook-item id="export-html" label="HTML"
           ><template slot="icon"
             ><svg
               viewBox="0 0 24 24"
@@ -556,8 +556,8 @@
               aria-hidden="true"
             >
               <use href="#nook-icon-code"></use></svg></template
-        ></nook-action>
-        <nook-action id="export-json" label="JSON"
+        ></nook-item>
+        <nook-item id="export-json" label="JSON"
           ><template slot="icon"
             ><svg
               viewBox="0 0 24 24"
@@ -569,8 +569,8 @@
               aria-hidden="true"
             >
               <use href="#nook-icon-code"></use></svg></template
-        ></nook-action>
-        <nook-action id="export-archive" label="Archive"
+        ></nook-item>
+        <nook-item id="export-archive" label="Archive"
           ><template slot="icon"
             ><svg
               viewBox="0 0 24 24"
@@ -582,7 +582,7 @@
               aria-hidden="true"
             >
               <use href="#nook-icon-archive"></use></svg></template
-        ></nook-action>
+        ></nook-item>
         <nook-menu label="More formats">
           <template slot="icon"
             ><svg
@@ -596,7 +596,7 @@
             >
               <use href="#nook-icon-more"></use></svg
           ></template>
-          <nook-action id="export-csv" label="CSV"
+          <nook-item id="export-csv" label="CSV"
             ><template slot="icon"
               ><svg
                 viewBox="0 0 24 24"
@@ -608,8 +608,8 @@
                 aria-hidden="true"
               >
                 <use href="#nook-icon-table"></use></svg></template
-          ></nook-action>
-          <nook-action id="export-rtf" label="Rich text"
+          ></nook-item>
+          <nook-item id="export-rtf" label="Rich text"
             ><template slot="icon"
               ><svg
                 viewBox="0 0 24 24"
@@ -621,7 +621,7 @@
                 aria-hidden="true"
               >
                 <use href="#nook-icon-text"></use></svg></template
-          ></nook-action>
+          ></nook-item>
         </nook-menu>
       </nook-menu>
       <nook-panel label="About Nook">
@@ -650,10 +650,10 @@
         </template>
       </nook-panel>
     </nook-menu>
-    <nook-action
+    <nook-item
       id="copy"
       label="Copy link"
-      keybind="Alt+C"
+      command="copy-link"
       priority="5"
       group="Sharing"
     >
@@ -669,8 +669,8 @@
         >
           <use href="#nook-icon-link"></use></svg
       ></template>
-    </nook-action>
-    <nook-action
+    </nook-item>
+    <nook-item
       id="duplicate-note"
       label="Duplicate note"
       priority="4"
@@ -685,8 +685,8 @@
         >
           <use href="#nook-icon-file"></use></svg
       ></template>
-    </nook-action>
-    <nook-action
+    </nook-item>
+    <nook-item
       id="archive-note"
       label="Archive note"
       priority="3"
@@ -701,7 +701,7 @@
         >
           <use href="#nook-icon-archive"></use></svg
       ></template>
-    </nook-action>
+    </nook-item>
     <nook-panel
       id="keyboard-guide"
       label="How Nook works"
@@ -741,13 +741,19 @@
         </div>
         <div class="touch-guide">
           <p>
-            Tap to open. Swipe sideways or diagonally for all actions, or up or
+            Tap to open. Swipe sideways or diagonally for full menu, or up or
             down for settings.
           </p>
         </div>
         <p>Hold, then drag the corner to move it.</p>
       </template>
     </nook-panel>
+    <nook-command
+      id="copy-link"
+      name="Copy link"
+      description="Copy this page's link to the clipboard."
+      keybind="Alt+C"
+    ></nook-command>
     <nook-command
       id="new-note"
       name="Create a note"
@@ -888,19 +894,20 @@
       if (source.id === "accent")
         dock.style.setProperty("--nook-accent", value);
     });
-    dock.addEventListener("nook-action", async (e) => {
-      if (e.detail.id === "copy") {
+    dock.addEventListener("nook-select", (event) => {
+      if (!event.detail.command)
+        dock.live.textContent = `${event.detail.source.getAttribute("label")} selected.`;
+    });
+    dock.addEventListener("nook-command", async (event) => {
+      const { id, args } = event.detail;
+      if (id === "copy-link") {
         try {
           await navigator.clipboard.writeText(location.href);
           dock.live.textContent = "Link copied.";
         } catch {
           dock.live.textContent = "Clipboard is unavailable.";
         }
-      } else
-        dock.live.textContent = `${e.detail.source.getAttribute("label")} selected.`;
-    });
-    dock.addEventListener("nook-command", (event) => {
-      const { id, args } = event.detail;
+      }
       if (id === "toggle-dark") {
         const setting = dock.querySelector("#theme");
         chosenTheme = true;
@@ -940,7 +947,7 @@
     for (const button of document.querySelectorAll("[data-view]"))
       button.onclick = () => dock.open(button.dataset.view);
     const status = document.querySelector("#demo-status");
-    dock.addEventListener("nook-action", (event) => {
+    dock.addEventListener("nook-select", (event) => {
       status.textContent = `${event.detail.source.getAttribute("label")} selected.`;
     });
     dock.addEventListener("nook-command", (event) => {
@@ -963,20 +970,29 @@
     };
     window.addEventListener("hashchange", showAppSettings);
     showAppSettings();
-    let extra;
+    let extra, extraCommand;
     document.querySelector("#dynamic").onclick = (e) => {
       if (extra) {
         extra.remove();
+        extraCommand.remove();
         extra = null;
         e.currentTarget.textContent = "Add contextual action";
         e.currentTarget.setAttribute("aria-pressed", "false");
       } else {
-        extra = document.createElement("nook-action");
+        extra = document.createElement("nook-item");
         extra.setAttribute("label", "Save page");
-        extra.setAttribute("keybind", "Alt+S");
+        extraCommand = document.createElement("nook-command");
+        extraCommand.id = "save-page";
+        extraCommand.setAttribute("name", "Save page");
+        extraCommand.setAttribute(
+          "description",
+          "A sample command for saving this page.",
+        );
+        extraCommand.keybind = "Alt+S";
+        extra.command = "save-page";
         extra.priority = 15;
         extra.group = "Workspace";
-        dock.append(extra);
+        dock.append(extraCommand, extra);
         e.currentTarget.textContent = "Remove contextual action";
         e.currentTarget.setAttribute("aria-pressed", "true");
       }
