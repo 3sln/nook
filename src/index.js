@@ -207,7 +207,8 @@ export class NookDock extends HTMLElement {
     this.anchor.append(this.handle, this.live, this.rootMeasure);
     this.overlayAnchor = this.make("div", "overlay-anchor");
     this.overlayAnchor.className = "anchor overlay-anchor";
-    this.shadowRoot.append(this.anchor, this.overlayAnchor);
+    // Keep the handle above overlay material when their configured elevations match.
+    this.shadowRoot.append(this.overlayAnchor, this.anchor);
     const mirrored = [
       "data-corner",
       "data-position",

@@ -485,3 +485,26 @@ test("a dial tooltip paints above neighboring choices", async ({
   });
   expect(paintedOnTop).toBe(true);
 });
+
+test("the dial backdrop is continuous and paints beneath the handle", async ({
+  page,
+}) => {
+  await page.locator("nook-dock").evaluate((dock) => dock.open());
+  const root = dial(page);
+  await expect(root).toBeVisible();
+  expect(
+    await root.evaluate((node) => getComputedStyle(node, "::before").maskImage),
+  ).toBe("none");
+  const handleOnTop = await page.locator("nook-dock").evaluate((dock) => {
+    const handle = dock.handle;
+    const bounds = handle.getBoundingClientRect();
+    // Give the overlay a hit surface to probe the actual stacking order.
+    dock.views.get("root").el.style.pointerEvents = "auto";
+    const top = dock.shadowRoot.elementFromPoint(
+      bounds.left + bounds.width / 2,
+      bounds.top + bounds.height / 2,
+    );
+    return handle === top || handle.contains(top);
+  });
+  expect(handleOnTop).toBe(true);
+});

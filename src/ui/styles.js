@@ -1845,7 +1845,6 @@ slot[part~="app"] { display: contents; }
   background: var(--nook-material-background);
   -webkit-backdrop-filter: blur(calc(var(--nook-dial-progress,0) * var(--nook-material-blur)));
   backdrop-filter: blur(calc(var(--nook-dial-progress,0) * var(--nook-material-blur)));
-  mask-image: radial-gradient(circle at var(--nook-dial-origin-x) var(--nook-dial-origin-y), transparent 0 56px, black 76px);
 }
 .swipe-dial-option {
   position: absolute; translate: -50% -50%; box-sizing: border-box; width: 88px; height: 72px; padding: 8px;
@@ -1905,7 +1904,6 @@ slot[part~="app"] { display: contents; }
   position: absolute; inset: 0; border: 0; border-radius: 0; box-shadow: none;
   background: var(--nook-material-background);
   -webkit-backdrop-filter: blur(var(--nook-material-blur)); backdrop-filter: blur(var(--nook-material-blur));
-  mask-image: radial-gradient(circle at var(--nook-dial-origin-x) var(--nook-dial-origin-y),transparent 0 56px,black 76px);
 }
 .anchor .surface[data-view="root"] .item {
   position: absolute; left: var(--nook-dial-x); top: var(--nook-dial-y);

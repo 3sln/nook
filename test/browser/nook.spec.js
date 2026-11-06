@@ -577,7 +577,7 @@ test("adaptive defaults, rounded compact backdrop, and locked-corner affordances
   }
   expect(
     await root.evaluate((node) => getComputedStyle(node, "::before").maskImage),
-  ).toContain("radial-gradient");
+  ).toBe("none");
   expect(
     await root.evaluate(
       (node) => getComputedStyle(node, "::before").backdropFilter,
