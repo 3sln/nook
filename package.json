@@ -1,6 +1,6 @@
 {
   "name": "@3sln/nook",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "A quiet, contextual corner for web app extras.",
   "exports": {
