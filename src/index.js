@@ -1529,7 +1529,14 @@ export class NookDock extends HTMLElement {
               this.open("settings");
               queueMicrotask(() => source._control?.focus());
             } else if (source) this.activate(source);
-            else this.builtins.get(entry.id).click();
+            else if (
+              view === this.views.get("all") &&
+              entry.id === "settings" &&
+              this.settingsHref
+            ) {
+              this.views.get("settings").link.click();
+              this.close();
+            } else this.builtins.get(entry.id).click();
           };
           record = { button, signature };
           view.overflowButtons.set(entry.id, record);

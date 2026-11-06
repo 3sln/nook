@@ -194,7 +194,7 @@ Set `settings-href` on the dock to show an **All settings** link below the quick
 </nook-dock>
 ```
 
-The equivalent property is `dock.settingsHref = "/settings"`. Set it to `null` or an empty string to remove the link. Changes project live without replacing controls or their drafts. A link alone makes Settings available, even without inline settings. It is a normal same-tab anchor with standard browser navigation and modified-click behavior. Its label uses Bab's `All settings` message. Style it with `::part(settings-footer)` and `::part(settings-link)`, `--nook-settings-footer-gap`, and `--nook-settings-link-color`.
+The equivalent property is `dock.settingsHref = "/settings"`. Set it to `null` or an empty string to remove the link. Changes project live without replacing controls or their drafts. A link alone makes Settings available, even without inline settings. In Full menu, Settings follows this link when configured; otherwise it opens quick settings. The dial always opens quick settings. It is a normal same-tab anchor with standard browser navigation and modified-click behavior. Its label uses Bab's `All settings` message. Style it with `::part(settings-footer)` and `::part(settings-link)`, `--nook-settings-footer-gap`, and `--nook-settings-link-color`.
 
 Picker parts: `enum-control`, `enum-trigger`, `enum-current`, `enum-chevron`, `enum-value`, `enum-options`, `enum-option`, `enum-option-content`, `enum-option-icon`, `enum-option-text`, `enum-option-label`, `enum-option-description`, `enum-selected-label`, `enum-check`, `enum-error`, and `enum-empty`. See the [ARIA listbox interaction pattern](https://www.w3.org/WAI/ARIA/apg/patterns/listbox/).
 

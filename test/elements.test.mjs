@@ -1772,3 +1772,37 @@ test("translating feedback labels preserves the live message input and draft", a
     "Cuéntanos más",
   );
 });
+
+test("Full menu Settings follows a live full-settings link while the dial keeps quick settings", async () => {
+  const dock = fixture();
+  await settle();
+  dock.open("all");
+  const choice = dock.views.get("all").overflowButtons.get("settings").button;
+  choice.click();
+  assert.equal(dock.state.path.at(-1), "settings");
+  let destination;
+  dock.views.get("settings").link.addEventListener("click", (event) => {
+    event.preventDefault();
+    destination = event.currentTarget.getAttribute("href");
+  });
+  dock.settingsHref = "/settings";
+  await settle();
+  dock.open("all");
+  assert.equal(
+    dock.views.get("all").overflowButtons.get("settings").button,
+    choice,
+  );
+  choice.click();
+  assert.equal(destination, "/settings");
+  assert.deepEqual(dock.state.path, []);
+  dock.open();
+  dock.builtins.get("settings").click();
+  assert.equal(dock.state.path.at(-1), "settings");
+  dock.settingsHref = null;
+  await settle();
+  destination = null;
+  dock.open("all");
+  choice.click();
+  assert.equal(destination, null);
+  assert.equal(dock.state.path.at(-1), "settings");
+});

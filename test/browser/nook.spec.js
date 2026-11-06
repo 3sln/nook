@@ -1232,3 +1232,37 @@ test("settings and feedback have roomier widths while respecting available space
     await page.evaluate(() => document.querySelector("nook-dock").close());
   }
 });
+
+test("Full menu Settings uses the app link and falls back to quick settings without one", async ({
+  page,
+}) => {
+  const dock = page.locator("nook-dock");
+  await dock.evaluate((node) => {
+    node.settingsHref = null;
+    node.open("all");
+  });
+  const fullMenu = page.getByRole("dialog", { name: "Full menu", exact: true });
+  await fullMenu.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Quick settings", exact: true }),
+  ).toBeVisible();
+  await dock.evaluate((node) => {
+    node.settingsHref = "#app-settings";
+  });
+  await dock.evaluate((node) => node.open("root"));
+  await page
+    .getByRole("dialog", { name: "Nook", exact: true })
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Quick settings", exact: true }),
+  ).toBeVisible();
+  await dock.evaluate((node) => node.open("all"));
+  await fullMenu.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL(/#app-settings$/);
+  await expect(page.locator("#app-settings")).toBeVisible();
+  await expect(fullMenu).toBeHidden();
+  await expect(
+    page.getByRole("dialog", { name: "Quick settings", exact: true }),
+  ).toBeHidden();
+});
