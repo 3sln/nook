@@ -13,10 +13,10 @@ export default `
   --nook-border: light-dark(#e9e7ef, #484151);
   --nook-material-background: color-mix(
     in srgb,
-    var(--nook-surface) 84%,
+    var(--nook-surface) 18%,
     transparent
   );
-  --nook-material-blur: 24px;
+  --nook-material-blur: 3px;
   --nook-radius: 16px;
   --nook-shadow:
     0 8px 32px light-dark(#241a4918, #00000048),
@@ -162,7 +162,9 @@ button {
   width: min(var(--nook-width, 304px), calc(var(--nook-bound-width, 100vw) - 24px));
   max-height: min(640px, calc(var(--nook-bound-height, 100dvh) - 96px));
   overflow: auto;
-  background: var(--nook-surface);
+  background: var(--nook-material-background);
+  -webkit-backdrop-filter: blur(var(--nook-material-blur));
+  backdrop-filter: blur(var(--nook-material-blur));
   border: 1px solid var(--nook-border);
   border-radius: var(--nook-radius);
   box-shadow: var(--nook-shadow);
@@ -528,6 +530,8 @@ kbd {
 
 /* Compact controls share one material, rather than individual button bubbles. */
 .surface[data-presentation="compact"] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -591,6 +595,8 @@ kbd {
     border-radius: 0;
     box-shadow: none;
     background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     isolation: isolate;
     padding: calc(24px + env(safe-area-inset-top, 0px))
       calc(24px + env(safe-area-inset-right, 0px))
@@ -607,9 +613,9 @@ kbd {
     -webkit-backdrop-filter: blur(
         var(--nook-backdrop-blur, var(--nook-material-blur))
       )
-      saturate(var(--nook-material-saturation, 125%));
+      saturate(var(--nook-material-saturation, 100%));
     backdrop-filter: blur(var(--nook-backdrop-blur, var(--nook-material-blur)))
-      saturate(var(--nook-material-saturation, 125%));
+      saturate(var(--nook-material-saturation, 100%));
     box-shadow: inset 0 1px 0
       var(
         --nook-material-highlight,
@@ -951,7 +957,7 @@ kbd {
 .surface > [part~="body"] {
   animation: reveal var(--nook-duration) ease-out;
 }
-/* Acrylic-style surface for transient controls: neutral tint, strong blur,
+/* Shared dial material for transient controls: light tint, subtle blur,
    a defined edge, and one elevation shadow. Feathering made the material muddy. */
 .surface[data-presentation="compact"] {
   isolation: isolate;
@@ -979,20 +985,22 @@ kbd {
   -webkit-backdrop-filter: blur(
       var(--nook-halo-blur, var(--nook-material-blur))
     )
-    saturate(var(--nook-material-saturation, 125%));
+    saturate(var(--nook-material-saturation, 100%));
   backdrop-filter: blur(var(--nook-halo-blur, var(--nook-material-blur)))
-    saturate(var(--nook-material-saturation, 125%));
+    saturate(var(--nook-material-saturation, 100%));
 }
 @supports not (
   (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
 ) {
   .surface[data-presentation="compact"]::before,
+  .surface[data-presentation="expanded"],
   .surface[data-presentation="expanded"]::before {
     background: var(--nook-surface);
   }
 }
 @media (prefers-reduced-transparency: reduce) {
   .surface[data-presentation="compact"]::before,
+  .surface[data-presentation="expanded"],
   .surface[data-presentation="expanded"]::before {
     background: var(--nook-surface);
     -webkit-backdrop-filter: none;
@@ -1831,9 +1839,9 @@ slot[part~="app"] { display: contents; }
 }
 .swipe-dial::before {
   content: ""; position: absolute; inset: 0;
-  background: color-mix(in srgb,var(--nook-surface) 18%,transparent);
-  -webkit-backdrop-filter: blur(calc(var(--nook-dial-progress,0) * 3px));
-  backdrop-filter: blur(calc(var(--nook-dial-progress,0) * 3px));
+  background: var(--nook-material-background);
+  -webkit-backdrop-filter: blur(calc(var(--nook-dial-progress,0) * var(--nook-material-blur)));
+  backdrop-filter: blur(calc(var(--nook-dial-progress,0) * var(--nook-material-blur)));
   mask-image: radial-gradient(circle at var(--nook-dial-origin-x) var(--nook-dial-origin-y), transparent 0 56px, black 76px);
 }
 .swipe-dial-option {
@@ -1882,6 +1890,7 @@ slot[part~="app"] { display: contents; }
   margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent;
   box-shadow: none; overflow: visible; translate: none; transform: none;
   pointer-events: none; display: block; isolation: isolate;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
   opacity: var(--nook-dial-progress,1);
 }
 .anchor .surface[data-view="root"] > header { display: none; }
@@ -1891,8 +1900,8 @@ slot[part~="app"] { display: contents; }
 }
 .anchor .surface[data-view="root"]::before {
   position: absolute; inset: 0; border: 0; border-radius: 0; box-shadow: none;
-  background: color-mix(in srgb,var(--nook-surface) 18%,transparent);
-  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  background: var(--nook-material-background);
+  -webkit-backdrop-filter: blur(var(--nook-material-blur)); backdrop-filter: blur(var(--nook-material-blur));
   mask-image: radial-gradient(circle at var(--nook-dial-origin-x) var(--nook-dial-origin-y),transparent 0 56px,black 76px);
 }
 .anchor .surface[data-view="root"] .item {

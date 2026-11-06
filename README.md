@@ -408,7 +408,7 @@ The close button appears only in fullscreen mobile views. Compact and desktop vi
 
 Embedders can override the default with `presentation="compact"` or `presentation="expanded"` on a `nook-menu`/`nook-panel`, or `root-presentation`, `settings-presentation`, `overflow-presentation` (or legacy `full-presentation`), `welcome-presentation` on the dock. Removing the override restores automatic selection. Use explicit presentation for custom content with unusual dimensions.
 
-Customize floating control backgrounds with `--nook-floating-background`; customize the viewport layer with `--nook-backdrop` and `--nook-backdrop-blur` (defaults to the shared 24px material blur). Group spacing uses `--nook-group-gap` (default `16px`).
+Customize floating control backgrounds with `--nook-floating-background`; customize the viewport layer with `--nook-backdrop` and `--nook-backdrop-blur` (defaults to the shared 3px material blur). Group spacing uses `--nook-group-gap` (default `16px`).
 
 ## Events and application behavior
 
@@ -500,11 +500,11 @@ During dragging, every allowed corner/center is outlined and the closest one is 
 
 Defaults adapt to light and dark schemes through native `color-scheme` and `light-dark()` colors. Set `nook-dock { color-scheme: dark; }` or `light` to choose explicitly; leave the default `light dark` to follow the system. Native controls, accent text contrast, floating controls, and backdrops follow the same palette. Explicit custom properties remain authoritative; use `light-dark(lightValue, darkValue)` when an override should also adapt.
 
-Compact views use one acrylic-style frosted toolbar: a neutral translucent tint, 24px blur, mild saturation, a crisp rounded edge, a fine inset highlight, and a single elevation shadow. Buttons and setting rows sit directly on the shared material; there are no feathered masks or persistent button bubbles. The material becomes opaque when backdrop filtering is unsupported or reduced transparency is requested.
+Compact views use one acrylic-style frosted toolbar: a neutral translucent tint, 3px blur, an 18% surface tint, a crisp rounded edge, a fine inset highlight, and a single elevation shadow. Buttons and setting rows sit directly on the shared material; there are no feathered masks or persistent button bubbles. The material becomes opaque when backdrop filtering is unsupported or reduced transparency is requested.
 
 Fullscreen views share the same tint, blur, saturation, and edge highlight, extending the material to the viewport. `--nook-material-background` and `--nook-material-blur` control both variants together; per-variant overrides remain available. Both variants use the same opaque fallback for reduced transparency or unsupported backdrop filtering.
 
-Customize it with `--nook-halo-background`, `--nook-halo-blur` (24px), `--nook-halo-inset` (-8px), `--nook-material-saturation` (125%), `--nook-material-edge`, `--nook-material-highlight`, `--nook-radius`, and `--nook-shadow`. Tap highlights are disabled; keyboard focus on the handle follows its quarter-circle outline.
+Customize it with `--nook-halo-background`, `--nook-halo-blur` (3px), `--nook-halo-inset` (-8px), `--nook-material-saturation` (100%), `--nook-material-edge`, `--nook-material-highlight`, `--nook-radius`, and `--nook-shadow`. Tap highlights are disabled; keyboard focus on the handle follows its quarter-circle outline.
 
 References: [Microsoft Acrylic guidance for transient menus and flyouts](https://learn.microsoft.com/en-us/windows/apps/design/style/acrylic) and [Josh W. Comeau's frosted-glass examples](https://www.joshwcomeau.com/css/backdrop-filter/). This is a CSS interpretation of the material, not the native OS implementation.
 

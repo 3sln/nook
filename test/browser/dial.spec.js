@@ -386,3 +386,39 @@ test("arrow navigation follows neighboring arc positions at every anchor", async
     await page.keyboard.press("Escape");
   }
 });
+
+test("panel backdrops match the dial in light and dark schemes", async ({
+  page,
+  isMobile,
+}) => {
+  for (const colorScheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme });
+    await page.locator("nook-dock").evaluate((dock) => {
+      dock.style.colorScheme = "normal";
+      dock.style.setProperty("--nook-color-scheme", "light dark");
+      dock.open();
+    });
+    const material = async (locator) =>
+      locator.evaluate((node, isMobile) => {
+        const pseudo =
+          node.dataset.view === "root" ||
+          node.dataset.presentation === "compact" ||
+          isMobile;
+        const style = getComputedStyle(node, pseudo ? "::before" : null);
+        return {
+          background: style.backgroundColor,
+          blur: style.backdropFilter.replace(/ saturate\(1\)/g, ""),
+        };
+      }, isMobile);
+    const expected = await material(dial(page));
+    expect(expected.blur).toBe("blur(3px)");
+    for (const view of ["all", "settings", "commands", "feedback"]) {
+      await page
+        .locator("nook-dock")
+        .evaluate((dock, view) => dock.open(view), view);
+      const panel = page.locator(`.surface[data-view="${view}"]`);
+      await expect(panel).toBeVisible();
+      expect(await material(panel)).toEqual(expected);
+    }
+  }
+});
