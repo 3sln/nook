@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { useKeyboardLayout } from "./keyboard.js";
 test.beforeEach(async ({ page }, testInfo) => {
   if (!testInfo.title.startsWith("first visit"))
     await page.addInitScript(() =>
@@ -56,12 +57,7 @@ test("live insertion and removal updates a visible full menu", async ({
 });
 test("separate shortcuts and Escape navigation", async ({ page, isMobile }) => {
   test.skip(isMobile, "Desktop shortcut contract");
-  test.skip(
-    !(await page.evaluate(() =>
-      Boolean(document.querySelector("nook-dock").browserKeyboardLayout),
-    )),
-    "Layout-dependent shortcuts disabled without reported mapping",
-  );
+  await useKeyboardLayout(page);
   await pressAltShift(page, "s");
   await expect(
     page.getByRole("dialog", { name: "Quick settings" }),
@@ -333,13 +329,7 @@ test("Alt/Option badges are transient and plain number keys do not activate", as
   isMobile,
 }) => {
   test.skip(isMobile, "Desktop keyboard hints");
-  const layout = await page.evaluate(() =>
-    Boolean(document.querySelector("nook-dock").browserKeyboardLayout),
-  );
-  test.skip(
-    !layout,
-    "Number selection is intentionally disabled without reported layout data",
-  );
+  await useKeyboardLayout(page);
   await page.getByRole("button", { name: "Open Nook menu" }).click();
   await page.keyboard.press("1");
   await expect(
@@ -1262,6 +1252,28 @@ test("Full menu Settings uses the app link and falls back to quick settings with
   await expect(page).toHaveURL(/#app-settings$/);
   await expect(page.locator("#app-settings")).toBeVisible();
   await expect(fullMenu).toBeHidden();
+  await expect(
+    page.getByRole("dialog", { name: "Quick settings", exact: true }),
+  ).toBeHidden();
+});
+
+test("an empty reported layout disables dependent shortcuts and number hints", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "Desktop keyboard contract");
+  await useKeyboardLayout(page, { empty: true });
+  await page.getByRole("button", { name: "Open Nook menu" }).click();
+  const root = page.getByRole("dialog", { name: "Nook", exact: true });
+  await page.keyboard.down("Alt");
+  await expect(root.locator("[part~=number]:visible")).toHaveCount(0);
+  await page.keyboard.press("1");
+  await expect(root).toBeVisible();
+  await page.keyboard.down("Shift");
+  await page.keyboard.press("s");
+  await page.keyboard.up("Shift");
+  await page.keyboard.up("Alt");
+  await expect(root).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Quick settings", exact: true }),
   ).toBeHidden();

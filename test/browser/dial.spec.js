@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { useKeyboardLayout } from "./keyboard.js";
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() =>
     localStorage.setItem("@3sln/nook:tutorial:v1", "seen"),
@@ -143,12 +144,7 @@ test("Alt helper reveals labels and numbers without moving the arc", async ({
   isMobile,
 }) => {
   test.skip(isMobile, "Desktop Alt helper");
-  test.skip(
-    !(await page.evaluate(() =>
-      Boolean(document.querySelector("nook-dock").browserKeyboardLayout),
-    )),
-    "Browser has not supplied layout mapping",
-  );
+  await useKeyboardLayout(page);
   await page.getByRole("button", { name: "Open Nook menu" }).click();
   const root = dial(page),
     first = root.getByRole("button", { name: "Full menu", exact: true });
