@@ -155,7 +155,7 @@ test("Alt helper reveals labels and numbers without moving the arc", async ({
     }),
   );
   await first.hover();
-  await expect(first.locator("[part~=tooltip]")).toHaveCSS("opacity", "1");
+  await expect(first.locator("[part~=tooltip]")).toBeHidden();
   await page.keyboard.down("Alt");
   await expect(first.locator("[part~=number]")).toHaveText("1");
   await expect(first.locator(".dial-caption")).toBeVisible();
@@ -168,10 +168,7 @@ test("Alt helper reveals labels and numbers without moving the arc", async ({
   );
   expect(after).toEqual(before);
   await page.keyboard.up("Alt");
-  await expect(first.locator(".dial-caption")).toHaveCSS(
-    "visibility",
-    "hidden",
-  );
+  await expect(first.locator(".dial-caption")).toBeVisible();
 });
 
 test("touch labels remain readable only where captions fit", async ({
@@ -417,4 +414,74 @@ test("panel backdrops match the dial in light and dark schemes", async ({
       expect(await material(panel)).toEqual(expected);
     }
   }
+});
+
+test("dial captions stay visible on hover and focus without duplicate tooltips", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "Desktop hover and focus");
+  await page.locator("nook-dock").evaluate((dock) => dock.open());
+  const root = dial(page);
+  const choice = root.getByRole("button", { name: "Full menu", exact: true });
+  await expect(choice.locator(".dial-caption")).toBeVisible();
+  await choice.hover();
+  await expect(choice.locator("[part~=tooltip]")).toBeHidden();
+  await expect(choice.locator(".dial-caption")).toBeVisible();
+  await choice.focus();
+  await expect(choice.locator("[part~=tooltip]")).toBeHidden();
+  await expect(choice.locator(".dial-caption")).toBeVisible();
+  await page.locator("nook-dock").evaluate((dock) => {
+    dock.style.setProperty("--nook-label-display", "none");
+    dock.open();
+  });
+  await choice.hover();
+  await expect(choice.locator(".dial-caption")).toBeHidden();
+  await expect(choice.locator("[part~=tooltip]")).toBeVisible();
+});
+
+test("a dial tooltip paints above neighboring choices", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "Desktop tooltips");
+  await page.locator("nook-dock").evaluate((dock) => {
+    dock.style.setProperty("--nook-label-display", "none");
+    dock.open();
+  });
+  const choice = dial(page).getByRole("button", {
+    name: "Full menu",
+    exact: true,
+  });
+  await choice.hover();
+  await expect(choice.locator("[part~=tooltip]")).toBeVisible();
+  await expect(choice.locator("[part~=tooltip]")).toHaveCSS("opacity", "1");
+  const paintedOnTop = await choice.evaluate((button) => {
+    const neighbor = [
+      ...button.closest(".surface").querySelectorAll(".item"),
+    ].find((node) => node !== button && node.getClientRects().length);
+    const box = button.getBoundingClientRect(),
+      other = neighbor.getBoundingClientRect();
+    const tooltip = button.querySelector(".tooltip");
+    // Put the tooltip over another button and enable hit testing just for this
+    // probe, so the topmost painted element can be checked without a screenshot.
+    Object.assign(tooltip.style, {
+      left: `${other.left + other.width / 2 - box.left}px`,
+      top: `${other.top + other.height / 2 - box.top}px`,
+      right: "auto",
+      bottom: "auto",
+      transform: "translate(-50%, -50%)",
+      pointerEvents: "auto",
+      width: "100px",
+    });
+    const bounds = tooltip.getBoundingClientRect();
+    const top = button
+      .getRootNode()
+      .elementFromPoint(
+        bounds.left + bounds.width / 2,
+        bounds.top + bounds.height / 2,
+      );
+    return tooltip === top || tooltip.contains(top);
+  });
+  expect(paintedOnTop).toBe(true);
 });

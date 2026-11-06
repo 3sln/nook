@@ -232,6 +232,9 @@ h2 {
     background var(--nook-duration),
     transform var(--nook-duration);
 }
+.item:focus-within { z-index: 2; }
+.item:hover { z-index: 3; }
+.item[data-selected] { z-index: 3; }
 .item:hover {
   background: color-mix(in srgb, var(--nook-accent) 8%, var(--nook-surface));
 }
@@ -1948,12 +1951,12 @@ slot[part~="app"] { display: contents; }
   animation: tutorial-bead 900ms ease-out 2;
 }
 @keyframes tutorial-bead { 50% { box-shadow: 0 0 0 5px color-mix(in srgb,var(--nook-accent) 18%,transparent); } }
+.tutorial-shortcuts { margin: 0 0 16px; display: grid; gap: 8px; }
+.tutorial-shortcuts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.tutorial-shortcuts dt { min-width: 0; font-size: var(--nook-text-sm); font-weight: var(--nook-label-weight); overflow-wrap: anywhere; }
+.tutorial-shortcuts dd { margin: 0; min-width: 0; text-align: end; }
+.tutorial-shortcuts kbd { font-size: var(--nook-text-xs); overflow-wrap: anywhere; white-space: normal; }
 ${tutorialGraphicsStyles}
 
-@media (hover: hover) and (pointer: fine) {
-  .anchor:not([data-numbering]) .surface[data-view="root"] .item:is(:hover,:focus-visible):not(:has(.dial-caption:hover)) .dial-caption { visibility: hidden; }
-  .anchor[data-numbering] .surface[data-view="root"] .item .dial-caption { visibility: visible; }
-}
-
-.anchor .surface[data-view="root"] .item:has(.dial-caption:hover) .tooltip { display: none; }
+.anchor .surface[data-view="root"] .item[data-caption-visible] .tooltip { display: none; }
 `;

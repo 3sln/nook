@@ -236,6 +236,7 @@ export default function swipeDial({ dock, i18n, signal }) {
     for (const option of options) {
       const location = fitted.get(option.id);
       option.el.toggleAttribute("data-dial-hidden", !location);
+      option.el.removeAttribute("data-caption-visible");
       if (!location) continue;
       option.el.dataset.dialOrder = String(location.angle);
       option.el.style.setProperty("--nook-dial-x", `${location.x - b.left}px`);
@@ -283,6 +284,7 @@ export default function swipeDial({ dock, i18n, signal }) {
         caption.hidden = true;
       else {
         captions.push(labelBox);
+        option.el.setAttribute("data-caption-visible", "");
         if (
           preview &&
           pending &&

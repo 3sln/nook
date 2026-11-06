@@ -340,8 +340,8 @@ test("Alt/Option badges are transient and plain number keys do not activate", as
   await expect(label).toBeVisible();
   const tooltip = feedback.locator("[part~=tooltip]");
   await feedback.hover();
-  await expect(tooltip).toHaveCSS("opacity", "1");
-  await expect(label).toBeHidden();
+  await expect(tooltip).toBeHidden();
+  await expect(label).toBeVisible();
   await page.keyboard.down("Alt");
   await expect(tooltip).toBeHidden();
   const badge = page
@@ -356,13 +356,13 @@ test("Alt/Option badges are transient and plain number keys do not activate", as
   expect(iconBounds.width).toBeCloseTo(56, 0);
   await page.keyboard.up("Alt");
   await expect(badge).toBeHidden();
-  await expect(label).toBeHidden();
+  await expect(label).toBeVisible();
   await page.mouse.move(0, 0);
   await feedback.focus();
   await page.keyboard.press("Tab");
   await page.keyboard.press("Shift+Tab");
   await expect(feedback).toBeFocused();
-  await expect(tooltip).toHaveCSS("opacity", "1");
+  await expect(tooltip).toBeHidden();
   await page.keyboard.down("Alt");
   await expect(tooltip).toBeHidden();
   await expect(label).toBeVisible();
@@ -1141,6 +1141,7 @@ test("clamped hover tooltip text preserves its bottom padding", async ({
     document.querySelector("nook-dock").remove();
     const dock = document.createElement("nook-dock");
     dock.style.setProperty("--nook-tooltip-lines", "2");
+    dock.style.setProperty("--nook-label-display", "none");
     const action = document.createElement("nook-action");
     action.setAttribute("label", label);
     dock.append(action);
@@ -1277,4 +1278,65 @@ test("an empty reported layout disables dependent shortcuts and number hints", a
   await expect(
     page.getByRole("dialog", { name: "Quick settings", exact: true }),
   ).toBeHidden();
+});
+
+test("desktop tutorial shows available configured shortcuts with platform modifier names", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "Desktop tutorial shortcuts");
+  for (const [platform, modifier, command] of [
+    ["MacIntel", "Option", "Command"],
+    ["Linux x86_64", "Alt", "Ctrl"],
+  ]) {
+    await page.addInitScript((platform) => {
+      Object.defineProperty(navigator, "platform", {
+        configurable: true,
+        value: platform,
+      });
+      Object.defineProperty(navigator, "userAgentData", {
+        configurable: true,
+        value: undefined,
+      });
+    }, platform);
+    await useKeyboardLayout(page);
+    await page.locator("nook-dock").evaluate((dock) => dock.open("welcome"));
+    const tutorial = page.locator('.surface[data-view="welcome"]');
+    const row = (label) =>
+      tutorial
+        .locator("[part~=tutorial-shortcut]")
+        .filter({ has: page.getByText(label, { exact: true }) });
+    await expect(row("Menu")).toContainText("Shift + ?");
+    await expect(row("Quick settings")).toContainText(
+      `${modifier} + Shift + S`,
+    );
+    await expect(row("Commands")).toContainText(`${command} + Shift + P`);
+    await expect(row("Feedback")).toContainText(`${modifier} + Shift + F`);
+    await expect(
+      tutorial.getByText(`Hold ${modifier} for labels and numbers.`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.locator("nook-dock").evaluate((dock) => {
+      dock.setAttribute("root-keybind", "Alt+K");
+      dock.setAttribute("settings-keybind", "");
+      dock.feedback = false;
+      dock
+        .querySelectorAll("nook-command")
+        .forEach((command) => command.remove());
+    });
+    await expect(row("Menu")).toContainText(`${modifier} + K`);
+    await expect(row("Quick settings")).toBeHidden();
+    await expect(row("Feedback")).toBeHidden();
+    await expect(row("Commands")).toBeHidden();
+  }
+  await useKeyboardLayout(page, { empty: true });
+  await page.locator("nook-dock").evaluate((dock) => dock.open("welcome"));
+  const tutorial = page.locator('.surface[data-view="welcome"]');
+  await expect(
+    tutorial
+      .locator("[part~=tutorial-shortcut]")
+      .filter({ has: page.getByText("Quick settings", { exact: true }) }),
+  ).toBeHidden();
+  await expect(tutorial.locator(".layout-hint")).toBeHidden();
 });

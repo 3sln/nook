@@ -1,3 +1,4 @@
+import { keyboardLabels } from "./ui/keyboardLabels.js";
 import { tutorialGraphic } from "./ui/tutorialGraphics.js";
 import swipeDial, { directionalChoice } from "./ui/swipeDial.js";
 import bounds, { hasAppContent } from "./ui/bounds.js";
@@ -641,20 +642,13 @@ export class NookDock extends HTMLElement {
       ? this.getAttribute("root-keybind")
       : "Shift+?";
     const supported = bindingSupported(binding, this.browserKeyboardLayout);
-    const text = supported
-      ? `Menu · ${binding
-          .split("+")
-          .map((key) => key.trim())
-          .join(" + ")}`
-      : "Menu";
     this.i18n.text(
       this.handleTipShortcut,
       supported ? "Menu · {keybind}" : "Menu",
       {
-        keybind: binding
-          .split("+")
-          .map((key) => key.trim())
-          .join(" + "),
+        keybind: keyboardLabels(
+          this.ownerDocument.defaultView.navigator,
+        ).format(binding),
       },
     );
   }
@@ -675,6 +669,7 @@ export class NookDock extends HTMLElement {
       if (this.isConnected) this.reconcile();
     }
     if (name === "root-keybind") this.updateHandleTip();
+    if (name.endsWith("-keybind") && this.isConnected) this.reconcile();
     if (
       ["feedback-disabled", "settings-href"].includes(name) &&
       this.isConnected
@@ -782,7 +777,26 @@ export class NookDock extends HTMLElement {
       keyboardGraphic.querySelector(".tutorial-enter-label"),
       "Enter",
     );
-    keyboard.append(keyboardGraphic, lead, numberTip);
+    const shortcuts = this.make("dl", "tutorial-shortcuts");
+    shortcuts.className = "tutorial-shortcuts";
+    const shortcutRows = new Map();
+    for (const [id, title] of [
+      ["root", "Menu"],
+      ["all", "Full menu"],
+      ["settings", "Quick settings"],
+      ["commands", "Commands"],
+      ["feedback", "Feedback"],
+    ]) {
+      const row = this.make("div", "tutorial-shortcut");
+      const label = this.make("dt", "tutorial-shortcut-label", title);
+      const value = this.make("kbd", "tutorial-shortcut-keybind");
+      const description = this.make("dd");
+      description.append(value);
+      row.append(label, description);
+      shortcuts.append(row);
+      shortcutRows.set(id, { row, value });
+    }
+    keyboard.append(shortcuts, keyboardGraphic, lead, numberTip);
     const touch = this.make("div", "tutorial-touch");
     touch.className = "touch-only";
     const touchLead = this.make(
@@ -827,6 +841,10 @@ export class NookDock extends HTMLElement {
     this.tutorialUI = {
       welcome,
       done,
+      lead,
+      numberTip,
+      shortcuts,
+      shortcutRows,
       regions: [
         ["tutorial", copy],
         ["tutorial-desktop", keyboard],
@@ -919,6 +937,51 @@ export class NookDock extends HTMLElement {
     this.i18n.attr(button, "aria-label", title);
     return button;
   }
+  reconcileTutorialShortcuts(items) {
+    const ui = this.tutorialUI;
+    if (!ui) return;
+    const labels = keyboardLabels(this.ownerDocument.defaultView.navigator);
+    this.i18n.text(
+      ui.lead,
+      "Arrows move; Enter selects. {back} goes back; Esc closes.",
+      { back: this.i18n.t(labels.back) },
+    );
+    this.i18n.text(ui.numberTip, "Hold {modifier} for labels and numbers.", {
+      modifier: this.i18n.t(labels.alt),
+    });
+    ui.numberTip.hidden =
+      !this.browserKeyboardLayout ||
+      ![...this.browserKeyboardLayout.values()].some((value) =>
+        /^[1-9]$/.test(value),
+      );
+    const defaults = {
+      root: "Shift+?",
+      all: "Alt+Shift+M",
+      settings: "Alt+Shift+S",
+      commands: labels.mac ? "Meta+Shift+P" : "Ctrl+Shift+P",
+      feedback: "Alt+Shift+F",
+    };
+    let visible = 0;
+    for (const [id, { row, value }] of ui.shortcutRows) {
+      const attribute = `${id}-keybind`;
+      const binding = this.hasAttribute(attribute)
+        ? this.getAttribute(attribute)
+        : defaults[id];
+      const available =
+        id === "root" ||
+        this.surfaceAvailable(id) ||
+        (id === "feedback" &&
+          !this.feedbackDisabled() &&
+          items.some((item) => item.hasAttribute("feedback")));
+      row.hidden =
+        !available || !bindingSupported(binding, this.browserKeyboardLayout);
+      if (!row.hidden) visible++;
+      const text = labels.format(binding);
+      if (value.textContent !== text) value.textContent = text;
+    }
+    ui.shortcuts.hidden = !visible;
+  }
+
   reconcileTutorial() {
     const ui = this.tutorialUI;
     if (!ui) return;
@@ -969,6 +1032,7 @@ export class NookDock extends HTMLElement {
     const set = new Set(items);
     const placements = new Map();
     this.planItems(items);
+    this.reconcileTutorialShortcuts(items);
     for (const [item, record] of this.records)
       if (!set.has(item)) {
         record.enum?.dispose();

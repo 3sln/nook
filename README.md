@@ -245,7 +245,7 @@ Feedback parts include `feedback-form`, `feedback-intro`, `feedback-types`, `fee
 
 Before its first opening, Nook gives a brief attention burst: about three soft pulses over six seconds, followed by a random 45–75 minute cooldown if unopened. The deadline is stored under `@3sln/nook:attention:v1`. Opening Nook stops the widget reminder and opens the usable dial immediately. A badged **Quick tour** choice provides optional, device-specific help. Escape or Back leaves it available; “Got it” acknowledges and removes it. Reduced-motion preferences disable the pulse and turn the gesture illustrations into static diagrams.
 
-The tutorial includes small SVG loops for touch picking, keyboard navigation, and holding then dragging. They use the current theme and run only while the tutorial is visible. Its optional number-key tip appears only when browser-reported layout data is available. The dial shows concise labels where they fit without overlapping. Long labels truncate; captions that cannot fit cleanly are omitted. Alt/Option reveals numbered choices on desktop. Icons never shift when the helper appears. Set `--nook-label-display: none` for an icon-only default.
+The tutorial includes small SVG loops for touch picking, keyboard navigation, and holding then dragging. They use the current theme and run only while the tutorial is visible. The desktop guide lists the available major shortcuts, respects configured or disabled bindings, and updates live. It uses Option/Command on macOS and Alt/Ctrl elsewhere; platform detection changes wording only, never keyboard matching. Its optional number-key tip appears only when browser-reported layout data resolves number keys. The dial shows concise labels where they fit without overlapping. Visible captions stay in place on hover or focus and suppress duplicate tooltips; icon-only choices retain tooltips above neighboring buttons. Long labels truncate; captions that cannot fit cleanly are omitted. Alt/Option reveals numbered choices on desktop. Icons never shift when the helper appears. Set `--nook-label-display: none` for an icon-only default.
 
 Acknowledging the tutorial records `seen` under `@3sln/nook:tutorial:v1` in localStorage. Merely opening Nook or navigating other views does not mark it seen. The preference is shared across docks on the same origin. If storage is unavailable, a document-scoped memory fallback remembers acknowledgement during the current page session.
 
@@ -289,7 +289,7 @@ Templates are cloned once on insertion/replacement. Unrelated mutations and navi
 
 Supply `tutorial-keyboard-graphic`, `tutorial-touch-graphic`, or `tutorial-drag-graphic` templates to replace individual illustrations without replacing the copy. `--nook-tutorial-graphic-width` sets their maximum width (360px by default). The SVGs expose `tutorial-graphic` and their respective graphic parts.
 
-Style `::part(tutorial)`, `::part(tutorial-desktop)`, `::part(tutorial-touch)`, `::part(tutorial-drag)`, and `::part(tutorial-continue)`. The welcome surface also exposes the shared `heading`, `header`, `body`, and `surface` parts. They inherit Nook's color, typography, spacing, and animation tokens.
+Style `::part(tutorial)`, `::part(tutorial-desktop)`, `::part(tutorial-shortcuts)`, `::part(tutorial-shortcut)`, `::part(tutorial-shortcut-label)`, `::part(tutorial-shortcut-keybind)`, `::part(tutorial-touch)`, `::part(tutorial-drag)`, and `::part(tutorial-continue)`. The welcome surface also exposes the shared `heading`, `header`, `body`, and `surface` parts. They inherit Nook's color, typography, spacing, and animation tokens.
 
 ## SVG sprite
 
@@ -355,7 +355,7 @@ dock.addEventListener("nook-command", (event) => {
 });
 ```
 
-Keyboard interpretation uses reported `KeyboardEvent.key` values and, for Alt/Option printable-key bindings and numbered selection, `navigator.keyboard.getLayoutMap()`. There are no US key-position tables, user-agent checks, inferred OS layouts, or embedder layout configuration. A layout-dependent binding is disabled and its hint hidden unless browser-provided mapping resolves its key. If layout data is absent, denied, incomplete, or later becomes unavailable, those bindings and their number badges are disabled; the UI remains clickable and logical-key shortcuts such as Ctrl/Cmd+Shift+P remain available. Available mappings are refreshed on focus, Alt/Option modifier presses, and browser layout-change events. Dependent bindings are suspended while a refresh is pending, and stale requests cannot overwrite newer results. Browser/OS-reserved combinations can still take precedence.
+Keyboard interpretation uses reported `KeyboardEvent.key` values and, for Alt/Option printable-key bindings and numbered selection, `navigator.keyboard.getLayoutMap()`. There are no US key-position tables, inferred OS layouts, or embedder layout configuration. Platform information is used only to choose modifier names in help text. A layout-dependent binding is disabled and its hint hidden unless browser-provided mapping resolves its key. If layout data is absent, denied, incomplete, or later becomes unavailable, those bindings and their number badges are disabled; the UI remains clickable and logical-key shortcuts such as Ctrl/Cmd+Shift+P remain available. Available mappings are refreshed on focus, Alt/Option modifier presses, and browser layout-change events. Dependent bindings are suspended while a refresh is pending, and stale requests cannot overwrite newer results. Browser/OS-reserved combinations can still take precedence.
 
 Search results, bindings, command availability, and argument definitions update live. Existing result buttons and form fields are retained. Adding a command does not erase the current query or draft arguments; opening the palette anew starts a fresh search. Newly added argument fields are pre-rendered before navigation.
 
@@ -445,12 +445,14 @@ Tap/click opens the root menu, with action icons. The device-specific introducti
 
 Fast swipes open Full menu horizontally or diagonally and Settings vertically. A slower held swipe reveals the same root dial used by tapping. Swipes have a 32px distance threshold and broad directional bands. Empty surfaces do not activate from gestures or shortcuts. Gestures start only on the handle, leaving application scrolling alone. Release directly on a dial choice to choose it; releasing elsewhere cancels. Extra choices never receive directional swipe bindings.
 
-| Desktop action  | Default       | Dock attribute     |
-| --------------- | ------------- | ------------------ |
-| Main/root menu  | `Shift+?`     | `root-keybind`     |
-| Settings        | `Alt+Shift+S` | `settings-keybind` |
-| More / overflow | `Alt+Shift+Q` | `overflow-keybind` |
-| Feedback        | `Alt+Shift+F` | `feedback-keybind` |
+| Desktop action  | Default                            | Dock attribute     |
+| --------------- | ---------------------------------- | ------------------ |
+| Main/root menu  | `Shift+?`                          | `root-keybind`     |
+| Settings        | `Alt+Shift+S`                      | `settings-keybind` |
+| Full menu       | `Alt+Shift+M`                      | `all-keybind`      |
+| Commands        | `Ctrl+Shift+P` / `Command+Shift+P` | `commands-keybind` |
+| More / overflow | `Alt+Shift+Q`                      | `overflow-keybind` |
+| Feedback        | `Alt+Shift+F`                      | `feedback-keybind` |
 
 `quick-keybind` remains a compatibility alias when `overflow-keybind` is absent. Set an empty `overflow-keybind` to disable the default.
 
