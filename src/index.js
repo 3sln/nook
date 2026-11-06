@@ -1,3 +1,6 @@
+import swipeDial from "./ui/swipeDial.js";
+import bounds, { hasAppContent } from "./ui/bounds.js";
+import localization from "./ui/localization.js";
 import feedbackUI from "./ui/feedback.js";
 import enumPicker from "./ui/enumPicker.js";
 import motion from "./ui/motion.js";
@@ -10,9 +13,12 @@ import { Container, Provider } from "@3sln/ngin/providers";
 import {
   MenuState,
   gesture,
-  closestAllowedCorner,
-  availableCorners,
+  closestAllowedPosition,
+  availablePositions,
+  positions,
+  responsivePositions,
   corners,
+  distributeItems,
   matchesKey,
   presentation,
   inheritedPresentation,
@@ -58,6 +64,20 @@ export class NookItem extends HTMLElement {
     this.attachShadow({ mode: "open" }).innerHTML =
       "<style>:host{display:none!important}</style>";
   }
+  get priority() {
+    if (!this.hasAttribute("priority")) return this.root ? 100 : 0;
+    const value = Number(this.getAttribute("priority"));
+    return Number.isFinite(value) ? value : 0;
+  }
+  set priority(value) {
+    this.setAttribute("priority", String(value));
+  }
+  get group() {
+    return this.getAttribute("group") || "";
+  }
+  set group(value) {
+    this.setAttribute("group", value || "");
+  }
   get root() {
     return this.hasAttribute("root");
   }
@@ -90,10 +110,18 @@ export class NookItem extends HTMLElement {
 export class NookDock extends HTMLElement {
   static observedAttributes = [
     "corner",
+    "position",
+    "position-policy",
+    "lang",
+    "boundary",
     "disabled-corners",
+    "disabled-positions",
     "root-keybind",
     "settings-keybind",
+    "settings-href",
     "quick-keybind",
+    "all-keybind",
+    "overflow-keybind",
     "feedback-keybind",
     "commands-keybind",
     "feedback-disabled",
@@ -101,55 +129,83 @@ export class NookDock extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    const style = make("style");
+    this.i18n = localization(this, make);
+    this.make = this.i18n.make;
+    const style = this.make("style");
     style.textContent = styles;
     this.shadowRoot.append(style);
-    const symbols = make("template");
+    this.appSlot = this.make("slot", "app");
+    this.shadowRoot.append(this.appSlot);
+    const symbols = this.make("template");
     symbols.innerHTML = sprite;
     this.shadowRoot.append(symbols.content);
-    this.anchor = make("div", "anchor");
+    this.anchor = this.make("div", "anchor");
     this.anchor.className = "anchor";
-    this.handle = make("button", "handle");
+    this.handle = this.make("button", "handle");
     this.handle.className = "handle";
     this.handle.type = "button";
-    this.handle.setAttribute("aria-label", "Open Nook menu");
+    this.i18n.attr(this.handle, "aria-label", "Open Nook menu");
     this.handle.setAttribute("aria-haspopup", "dialog");
-    const icon = make("span", "mark");
+    const icon = this.make("span", "mark");
     icon.className = "mark";
     icon.innerHTML = mark;
-    this.handleTip = make("span", "handle-tooltip");
+    this.handleTip = this.make("span", "handle-tooltip");
     this.handleTip.className = "handle-tooltip";
     this.handleTip.setAttribute("role", "tooltip");
-    this.handleTipShortcut = make("span", "handle-shortcut");
-    const dragHint = make("span", "drag-hint", "Hold, then drag to move.");
+    this.handleTipShortcut = this.make("span", "handle-shortcut");
+    const dragHint = this.make("span", "drag-hint", "Hold, then drag to move.");
     this.handleTip.append(this.handleTipShortcut, dragHint);
     this.updateHandleTip();
     this.handle.append(icon, this.handleTip);
-    this.live = make("div", "announcement");
+    this.live = this.make("div", "announcement");
     this.live.className = "live";
     this.live.setAttribute("aria-live", "polite");
-    this.anchor.append(this.handle, this.live);
-    this.shadowRoot.append(this.anchor);
-    this.preview = make("div", "drag-preview");
+    this.rootMeasure = this.make("span");
+    this.rootMeasure.className = "root-measure";
+    this.rootMeasure.hidden = true;
+    this.anchor.append(this.handle, this.live, this.rootMeasure);
+    this.overlayAnchor = this.make("div", "overlay-anchor");
+    this.overlayAnchor.className = "anchor overlay-anchor";
+    this.shadowRoot.append(this.anchor, this.overlayAnchor);
+    const mirrored = [
+      "data-corner",
+      "data-position",
+      "data-numbering",
+      "data-alt-held",
+      "data-layout-ready",
+      "data-draggable",
+      "lang",
+    ];
+    this.syncLayers = () => {
+      for (const name of mirrored) {
+        const value = this.anchor.getAttribute(name);
+        if (value === null) this.overlayAnchor.removeAttribute(name);
+        else this.overlayAnchor.setAttribute(name, value);
+      }
+    };
+    this.layerObserver = new MutationObserver(this.syncLayers);
+    this.mirroredAttributes = mirrored;
+    this.anchor.lang = this.locale;
+    this.preview = this.make("div", "drag-preview");
     this.preview.className = "anchor preview";
     this.preview.hidden = true;
     this.preview.setAttribute("aria-hidden", "true");
-    const previewHandle = make("div", "preview-handle");
+    const previewHandle = this.make("div", "preview-handle");
     previewHandle.className = "handle";
-    const previewMark = make("span", "preview-mark");
+    const previewMark = this.make("span", "preview-mark");
     previewMark.className = "mark";
     previewMark.innerHTML = mark;
     previewHandle.append(previewMark);
     this.preview.append(previewHandle);
     this.shadowRoot.append(this.preview);
     this.landingSpots = new Map();
-    for (const corner of corners) {
-      const spot = make("div", "landing-zone");
+    for (const corner of positions) {
+      const spot = this.make("div", "landing-zone");
       spot.className = "anchor landing-zone";
       spot.dataset.corner = corner;
       spot.hidden = true;
       spot.setAttribute("aria-hidden", "true");
-      const shape = make("div", "landing-outline");
+      const shape = this.make("div", "landing-outline");
       shape.className = "handle";
       spot.append(shape);
       this.landingSpots.set(corner, spot);
@@ -180,8 +236,16 @@ export class NookDock extends HTMLElement {
     });
   }
   connectedCallback() {
+    this.syncLayers();
+    this.layerObserver.observe(this.anchor, {
+      attributes: true,
+      attributeFilter: this.mirroredAttributes,
+    });
     this.abort = new AbortController();
     const signal = this.abort.signal;
+    this.positionMedia = this.ownerDocument.defaultView.matchMedia(
+      "(pointer: coarse), (hover: none)",
+    );
     this.motion = motion({
       window: this.ownerDocument.defaultView,
       signal,
@@ -217,11 +281,25 @@ export class NookDock extends HTMLElement {
     this.ownerDocument.defaultView.addEventListener("focus", readLayout, {
       signal,
     });
+    this.boundsController = bounds(this, {
+      signal,
+      onChange: (rect) => {
+        this.anchorRect = rect;
+        if (this.state) this.refreshPositions();
+      },
+    });
     this.buildViews();
+    this.swipeDial = swipeDial({
+      dock: this,
+      make: this.make,
+      i18n: this.i18n,
+      signal,
+    });
     this.feedbackUI?.dispose();
     this.feedbackUI = feedbackUI({
       view: this.views.get("feedback"),
-      make,
+      make: this.make,
+      i18n: this.i18n,
       dock: this,
       getHooks: () => this.feedback,
       signal,
@@ -242,8 +320,9 @@ export class NookDock extends HTMLElement {
     this.subscription = this.queries
       .query(
         new MenuState(
-          this.getAttribute("corner"),
-          this.getAttribute("disabled-corners"),
+          this.getAttribute("position") || this.getAttribute("corner"),
+          this.blockedPositions(),
+          this.viewportPositions(true),
         ),
       )
       .subscribe((state) => this.project(state));
@@ -267,6 +346,7 @@ export class NookDock extends HTMLElement {
     });
     const clearNumbers = () => {
       this.altHeld = false;
+      this.anchor.removeAttribute("data-alt-held");
       delete this.anchor.dataset.numbering;
     };
     this.ownerDocument.addEventListener(
@@ -315,11 +395,30 @@ export class NookDock extends HTMLElement {
 
     this.ownerDocument.defaultView.addEventListener(
       "resize",
-      () => this.reconcile(),
+      () => this.refreshPositions(),
+      { signal },
+    );
+    this.positionMedia.addEventListener(
+      "change",
+      () => this.refreshPositions(true),
+      { signal },
+    );
+    this.ownerDocument.defaultView.addEventListener(
+      "orientationchange",
+      () => this.refreshPositions(true),
+      { signal },
+    );
+    this.ownerDocument.defaultView.screen?.orientation?.addEventListener(
+      "change",
+      () => this.refreshPositions(true),
       { signal },
     );
   }
   disconnectedCallback() {
+    this.layerObserver.disconnect();
+    this.altHeld = false;
+    this.anchor.removeAttribute("data-alt-held");
+    delete this.anchor.dataset.numbering;
     this.abort?.abort();
     this.observer?.disconnect();
     this.cancelPointer();
@@ -331,6 +430,55 @@ export class NookDock extends HTMLElement {
     const queries = this.queries,
       container = this.container;
     void queries?.dispose().then(() => container.dispose());
+  }
+  get captureRoot() {
+    if (!this.anchorRect?.wrapped) return this.ownerDocument.documentElement;
+    const app = [...this.children].filter(
+      (node) =>
+        !node.localName.startsWith("nook-") &&
+        !["template", "style", "script"].includes(node.localName),
+    );
+    return app.length === 1 ? app[0] : this;
+  }
+  get captureExclusions() {
+    return [
+      this.anchor,
+      this.overlayAnchor,
+      this.preview,
+      ...this.landingSpots.values(),
+    ];
+  }
+  get localization() {
+    return this._localization;
+  }
+  set localization(value) {
+    this._localization = value;
+    this.i18n.configure(value);
+    if (this.isConnected) this.reconcile();
+  }
+  get locale() {
+    return this.i18n.locale;
+  }
+  get settingsHref() {
+    return this.getAttribute("settings-href")?.trim() || "";
+  }
+  set settingsHref(value) {
+    if (value == null || String(value).trim() === "")
+      this.removeAttribute("settings-href");
+    else this.setAttribute("settings-href", String(value));
+  }
+  get priorities() {
+    return this._priorities;
+  }
+  set priorities(value) {
+    this._priorities = value;
+    if (this.isConnected) this.reconcile();
+  }
+  surfaceAvailable(id) {
+    if (id === "all") return Boolean(this.allEntries?.length);
+    return id === "quick" || id === "full" || id === "overflow"
+      ? Boolean(this.overflowEntries?.length)
+      : this.availableBuiltins?.has(id);
   }
   get tutorial() {
     return this._tutorial;
@@ -349,12 +497,83 @@ export class NookDock extends HTMLElement {
   feedbackDisabled() {
     return this._feedback === false || this.hasAttribute("feedback-disabled");
   }
+  viewportPositions(force = false) {
+    const view = this.ownerDocument.defaultView;
+    const width = this.anchorRect?.wrapped
+        ? this.anchorRect.width
+        : view.innerWidth,
+      height = this.anchorRect?.wrapped
+        ? this.anchorRect.height
+        : view.innerHeight;
+    let active = this.ownerDocument.activeElement;
+    while (active?.shadowRoot?.activeElement)
+      active = active.shadowRoot.activeElement;
+    const editing =
+      active?.isContentEditable ||
+      active?.matches(
+        "input,textarea,select,[contenteditable]:not([contenteditable=false])",
+      );
+    if (
+      force ||
+      !this.policyViewport ||
+      !editing ||
+      width !== this.policyViewport.width
+    )
+      this.policyViewport = { width, height };
+    return this.getAttribute("position-policy") === "all"
+      ? [...positions]
+      : responsivePositions({
+          ...this.policyViewport,
+          touch:
+            this.positionMedia?.matches ??
+            view.matchMedia("(pointer: coarse), (hover: none)").matches,
+        });
+  }
+  refreshPositions(force = false) {
+    this.send({
+      type: "configure-positions",
+      disabled: this.blockedPositions(),
+      options: this.viewportPositions(force),
+    });
+    if (this.isConnected) this.reconcile();
+  }
+  get availablePositions() {
+    if (this.state) return [...this.state.allowedPositions];
+    const options = this.viewportPositions();
+    return availablePositions(this.blockedPositions()).filter((position) =>
+      options.includes(position),
+    );
+  }
+  get preferredPosition() {
+    return this.state?.preferredPosition || this.position;
+  }
+  get position() {
+    return (
+      this.state?.corner ||
+      this.getAttribute("position") ||
+      this.getAttribute("corner") ||
+      "bottom-right"
+    );
+  }
+  set position(value) {
+    this.setAttribute("position", value);
+  }
+  blockedPositions() {
+    return `${this.getAttribute("disabled-corners") || ""} ${this.getAttribute("disabled-positions") || ""}`;
+  }
+  get disabledPositions() {
+    const allowed = availablePositions(this.blockedPositions());
+    return positions.filter((position) => !allowed.includes(position));
+  }
+  set disabledPositions(value) {
+    this.setAttribute(
+      "disabled-positions",
+      Array.isArray(value) ? value.join(" ") : String(value || ""),
+    );
+  }
   get disabledCorners() {
-    return corners.filter(
-      (corner) =>
-        !availableCorners(this.getAttribute("disabled-corners")).includes(
-          corner,
-        ),
+    return this.disabledPositions.filter((position) =>
+      corners.includes(position),
     );
   }
   set disabledCorners(value) {
@@ -364,14 +583,11 @@ export class NookDock extends HTMLElement {
     );
   }
   canDrag() {
+    if (this.anchorRect && !this.anchorRect.visible) return false;
     return (
-      this.state?.allowedCorners ||
-      availableCorners(this.getAttribute("disabled-corners"))
-    ).some(
-      (corner) =>
-        corner !==
-        (this.state?.corner || this.getAttribute("corner") || "bottom-right"),
-    );
+      this.state?.allowedPositions ||
+      availablePositions(this.blockedPositions())
+    ).some((position) => position !== this.position);
   }
   dismissHandleTip() {
     this.handle.setAttribute("data-tooltip-dismissed", "");
@@ -388,26 +604,57 @@ export class NookDock extends HTMLElement {
           .map((key) => key.trim())
           .join(" + ")}`
       : "Menu";
-    if (this.handleTipShortcut.textContent !== text)
-      this.handleTipShortcut.textContent = text;
+    this.i18n.text(
+      this.handleTipShortcut,
+      supported ? "Menu · {keybind}" : "Menu",
+      {
+        keybind: binding
+          .split("+")
+          .map((key) => key.trim())
+          .join(" + "),
+      },
+    );
   }
   attributeChangedCallback(name, oldValue, value) {
-    if (oldValue === value) return;
+    if (
+      oldValue === value &&
+      !(
+        ["corner", "position"].includes(name) &&
+        !this.reflectingCorner &&
+        this.state &&
+        this.state.preferredPosition !== value
+      )
+    )
+      return;
+    if (name === "boundary") this.boundsController?.refresh();
+    if (name === "lang") {
+      this.i18n.refresh();
+      if (this.isConnected) this.reconcile();
+    }
     if (name === "root-keybind") this.updateHandleTip();
-    if (name === "feedback-disabled" && this.isConnected) this.reconcile();
-    if (name === "disabled-corners")
-      this.send({ type: "configure-corners", disabled: value });
-    if (name === "corner" && !this.reflectingCorner)
+    if (
+      ["feedback-disabled", "settings-href"].includes(name) &&
+      this.isConnected
+    )
+      this.reconcile();
+    if (
+      ["disabled-corners", "disabled-positions", "position-policy"].includes(
+        name,
+      )
+    )
+      this.refreshPositions();
+    if (["corner", "position"].includes(name) && !this.reflectingCorner) {
       this.send({ type: "corner", corner: value });
+      if (this.isConnected) this.reconcile();
+    }
   }
   send(detail) {
     this.intents.dispatchEvent(new CustomEvent("intent", { detail }));
   }
   open(view = "root") {
-    if (
-      ["commands", "feedback"].includes(view) &&
-      this.builtins.get(view).hidden
-    )
+    if (view === "overflow" || view === "quick") view = "full";
+    if (!this.views.has(view)) return;
+    if (["commands", "feedback"].includes(view) && !this.surfaceAvailable(view))
       return;
     this.send({ type: "open", view });
   }
@@ -416,29 +663,29 @@ export class NookDock extends HTMLElement {
   }
   view(id, title) {
     if (this.views.has(id)) return this.views.get(id);
-    const el = make("section", "surface");
+    const el = this.make("section", "surface");
     el.className = "surface";
     el.dataset.view =
       typeof id === "string" ? id : id.localName.replace("nook-", "");
     el.hidden = true;
     el.setAttribute("role", "dialog");
-    el.setAttribute("aria-label", title);
-    const header = make("header", "header");
-    const back = make("button", "back");
+    this.i18n.attr(el, "aria-label", title);
+    const header = this.make("header", "header");
+    const back = this.make("button", "back");
     back.innerHTML = icon("back");
     back.className = "quiet";
-    back.setAttribute("aria-label", "Go back");
+    this.i18n.attr(back, "aria-label", "Go back");
     back.onclick = () => this.send({ type: "back" });
-    const heading = make("h2", "heading", title);
-    const close = make("button", "close");
+    const heading = this.make("h2", "heading", title);
+    const close = this.make("button", "close");
     close.innerHTML = icon("close");
     close.className = "quiet";
-    close.setAttribute("aria-label", "Close menu");
+    this.i18n.attr(close, "aria-label", "Close menu");
     close.onclick = () => this.close();
     header.append(back, heading, close);
-    const body = make("div", "body");
+    const body = this.make("div", "body");
     el.append(header, body);
-    this.anchor.append(el);
+    this.overlayAnchor.append(el);
     const result = { el, body, heading, back };
     this.views.set(id, result);
     return result;
@@ -447,50 +694,88 @@ export class NookDock extends HTMLElement {
     if (this.views.has("root")) return;
     for (const [id, title] of [
       ["root", "Nook"],
-      ["quick", "Quick menu"],
-      ["full", "All shortcuts"],
+      ["full", "More"],
+      ["all", "All actions"],
       ["settings", "Quick settings"],
-      ["help", "Meet Nook"],
-      ["corners", "Make yourself at home"],
       ["commands", "Commands"],
       ["welcome", "Welcome to Nook"],
       ["feedback", "Feedback"],
     ])
       this.view(id, title);
-    for (const id of ["root", "quick", "full"]) {
-      const grid = make("div", "items");
+    for (const id of ["root", "full", "all"]) {
+      const grid = this.make("div", "items");
       grid.className = "items";
       this.views.get(id).body.append(grid);
       this.views.get(id).grid = grid;
     }
-    this.views.get("quick").el.classList.add("quick");
+    const settings = this.views.get("settings");
+    settings.footer = this.make("div", "settings-footer");
+    settings.footer.hidden = true;
+    settings.link = this.make("a", "settings-link", "All settings");
+    settings.footer.append(settings.link);
+    settings.body.append(settings.footer);
     const welcome = this.views.get("welcome");
-    const copy = make("div", "tutorial");
+    const copy = this.make("div", "tutorial");
     copy.className = "tutorial";
-    const keyboard = make("div", "tutorial-desktop");
+    const keyboard = this.make("div", "tutorial-desktop");
     keyboard.className = "keyboard-only";
-    keyboard.innerHTML =
-      '<p><strong>A small corner for useful extras.</strong> Click the corner to find actions, settings, and help for this page.</p><p>Use arrows to move and Enter to choose. Backspace goes back; Escape closes the menu.</p><p class="layout-hint">Hold Alt / Option to reveal numbered shortcuts.</p>';
-    const touch = make("div", "tutorial-touch");
+    const lead = this.make("p");
+    lead.append(
+      this.make("strong", null, "A small corner for useful extras."),
+      document.createTextNode(" "),
+      this.make(
+        "span",
+        null,
+        "Click Nook to find actions, settings, and help for this page.",
+      ),
+    );
+    const numberTip = this.make(
+      "p",
+      null,
+      "Hold Alt / Option to reveal numbered shortcuts.",
+    );
+    numberTip.className = "layout-hint";
+    keyboard.append(
+      lead,
+      this.make(
+        "p",
+        null,
+        "Use arrows to move and Enter to choose. Backspace goes back; Escape closes the menu.",
+      ),
+      numberTip,
+    );
+    const touch = this.make("div", "tutorial-touch");
     touch.className = "touch-only";
-    touch.innerHTML =
-      "<p><strong>Your extras, within reach.</strong> Tap the corner for actions, settings, and help.</p><p>When available, swipe sideways for shortcuts, up or down for settings, or diagonally for the full menu.</p>";
-    const welcomeMove = make(
+    const touchLead = this.make("p");
+    touchLead.append(
+      this.make("strong", null, "Your extras, within reach."),
+      document.createTextNode(" "),
+      this.make("span", null, "Tap Nook for actions, settings, and help."),
+    );
+    touch.append(
+      touchLead,
+      this.make(
+        "p",
+        null,
+        "When available, swipe sideways or diagonally for all actions, or up or down for settings.",
+      ),
+    );
+    const welcomeMove = this.make(
       "p",
       "drag-hint",
-      "Hold the corner, then drag to move it.",
+      "Hold Nook, then drag to move it.",
     );
     welcomeMove.setAttribute("part", "drag-hint tutorial-drag");
     copy.append(keyboard, touch, welcomeMove);
-    const done = make("button", "tutorial-continue", "Got it");
+    const done = this.make("button", "tutorial-continue", "Got it");
     done.className = "command-run";
     done.onclick = () => {
       let target = this.state?.introTarget;
       if (typeof target !== "string" && !this.records.has(target))
         target = "root";
       if (
-        ["commands", "quick", "settings", "feedback"].includes(target) &&
-        this.builtins.get(target)?.hidden
+        ["commands", "settings", "feedback", "full", "all"].includes(target) &&
+        !this.surfaceAvailable(target)
       )
         target = "root";
       this.send({ type: "finish-intro", view: target || "root" });
@@ -498,46 +783,14 @@ export class NookDock extends HTMLElement {
     welcome.body.append(copy, done);
 
     const root = this.views.get("root");
-    const helpBody = this.views.get("help").body;
-    const intro = make("div", "help");
-    intro.className = "help";
-    // Both instruction sets stay mounted. Capability media queries update live
-    // when touch emulation or the primary pointing device changes.
-    const keyboardHelp = make("div", "help-desktop");
-    keyboardHelp.className = "keyboard-only";
-    keyboardHelp.innerHTML =
-      "<p>Use arrow keys to move, Enter or Space to choose, and hold Alt/Option for numbered shortcuts.</p><p>Escape closes. Backspace goes back.</p>";
-    const touchHelp = make("div", "help-touch");
-    touchHelp.className = "touch-only";
-    touchHelp.innerHTML =
-      "<p>Tap to open. Swipe sideways for shortcuts, up or down for settings, or diagonally for all shortcuts.</p>";
-    intro.append(keyboardHelp, touchHelp);
-    const hold = make(
-      "p",
-      "drag-hint",
-      "Hold, then drag to move Nook to another corner.",
-    );
-    hold.setAttribute("part", "drag-hint help-drag");
-    intro.append(hold);
-    helpBody.append(intro);
-    const move = make("button", "move-button", "Choose a corner");
-    move.className = "quiet";
-    move.onclick = () => this.send({ type: "enter", view: "corners" });
-    helpBody.append(move);
     this.tutorialUI = {
       welcome,
-      help: this.views.get("help"),
       done,
-      move,
       regions: [
         ["tutorial", copy],
         ["tutorial-desktop", keyboard],
         ["tutorial-touch", touch],
         ["tutorial-drag", welcomeMove],
-        ["help", intro],
-        ["help-desktop", keyboardHelp],
-        ["help-touch", touchHelp],
-        ["help-drag", hold],
       ].map(([name, element]) => ({
         name,
         element,
@@ -545,26 +798,10 @@ export class NookDock extends HTMLElement {
         template: null,
       })),
     };
-    const choices = make("div", "corners");
-    choices.className = "corners";
-    for (const corner of [
-      "top-left",
-      "top-right",
-      "bottom-left",
-      "bottom-right",
-    ]) {
-      const button = make("button", "corner-option", corner.replace("-", " "));
-      button.onclick = () => {
-        this.setAttribute("corner", corner);
-      };
-      button.dataset.corner = corner;
-      choices.append(button);
-    }
-    this.views.get("corners").body.append(choices);
     this.builtins = new Map();
     for (const [id, title, iconText] of [
       ["feedback", "Feedback", icon("feedback")],
-      ["quick", "Quick menu", icon("menu")],
+      ["quick", "More", icon("more")],
       ["settings", "Settings", icon("settings")],
       ["commands", "Commands", icon("commands")],
     ]) {
@@ -576,7 +813,8 @@ export class NookDock extends HTMLElement {
     }
     this.palette = commandPalette({
       view: this.views.get("commands"),
-      make,
+      make: this.make,
+      i18n: this.i18n,
       choose: (source) => this.chooseCommand(source),
       run: (source, args) => this.runCommand(source, args),
       createEnum: (source, title, commit, initialValue) =>
@@ -584,16 +822,12 @@ export class NookDock extends HTMLElement {
       supported: (binding) =>
         bindingSupported(binding, this.browserKeyboardLayout),
     });
-    const more = this.itemButton(null, "All shortcuts", icon("more"));
-    more.onclick = () => this.send({ type: "enter", view: "full" });
-    this.more = more;
-    this.views.get("quick").grid.append(more);
   }
   itemButton(item, title, iconText = icon("file")) {
-    const button = make("button", "item");
+    const button = this.make("button", "item");
     button.className = "item";
     button.type = "button";
-    const icon = make("span", "icon");
+    const icon = this.make("span", "icon");
     icon.className = "icon";
     const template = item && childSlot(item, "icon");
     if (template)
@@ -603,24 +837,29 @@ export class NookDock extends HTMLElement {
           : template.cloneNode(true),
       );
     else icon.innerHTML = iconText;
-    const text = make("span", "item-label", title);
+    const text = this.make("span", "item-label", title);
     text.className = "item-label";
-    const tooltip = make(
-      "span",
-      "tooltip",
-      title +
-        (item?.keybind &&
-        bindingSupported(item.keybind, this.browserKeyboardLayout)
-          ? ` · ${item.keybind}`
-          : ""),
+    const tooltip = this.make("span", "tooltip");
+    const tooltipText = this.make("span", "tooltip-text");
+    const binding =
+      item?.keybind &&
+      bindingSupported(item.keybind, this.browserKeyboardLayout)
+        ? item.keybind
+        : "";
+    this.i18n.text(
+      tooltipText,
+      binding ? "{label} · {keybind}" : "{label}",
+      () => ({ label: this.i18n.t(title), keybind: binding }),
     );
+    tooltip.append(tooltipText);
+    tooltipText.className = "tooltip-text";
     tooltip.className = "tooltip";
     tooltip.setAttribute("aria-hidden", "true");
-    const number = make("span", "number");
+    const number = this.make("span", "number");
     number.className = "number";
     number.setAttribute("aria-hidden", "true");
     button.append(icon, text, tooltip, number);
-    button.setAttribute("aria-label", title);
+    this.i18n.attr(button, "aria-label", title);
     return button;
   }
   reconcileTutorial() {
@@ -629,16 +868,14 @@ export class NookDock extends HTMLElement {
     const options = this.tutorial || {};
     for (const [view, title] of [
       [ui.welcome, options.title ?? "Welcome to Nook"],
-      [ui.help, options.helpTitle ?? "Meet Nook"],
     ]) {
-      if (view.heading.textContent !== title) view.heading.textContent = title;
-      view.el.setAttribute("aria-label", title);
+      this.i18n.text(view.heading, title);
+      this.i18n.attr(view.el, "aria-label", title);
     }
     for (const [element, text] of [
       [ui.done, options.continueLabel ?? "Got it"],
-      [ui.move, options.moveLabel ?? "Choose a corner"],
     ])
-      if (element.textContent !== text) element.textContent = text;
+      this.i18n.text(element, text);
     for (const region of ui.regions) {
       const template =
         [...this.children].find(
@@ -655,7 +892,9 @@ export class NookDock extends HTMLElement {
     }
   }
   reconcile() {
-    if (!this.isConnected) return;
+    if (!this.isConnected || !this.builtins) return;
+    const focused = this.shadowRoot.activeElement;
+    const focusedView = focused?.closest(".surface")?.dataset.view;
     this.reconcileTutorial();
     this.updateHandleTip();
     const items = [...this.querySelectorAll(tags)].filter(
@@ -667,12 +906,12 @@ export class NookDock extends HTMLElement {
     );
     const set = new Set(items);
     const placements = new Map();
+    this.planItems(items);
     for (const [item, record] of this.records)
       if (!set.has(item)) {
         record.enum?.dispose();
         record.args?.dispose?.();
         record.buttons.forEach((b) => b.remove());
-        record.quick?.remove();
         if (record.view) {
           record.view.el.remove();
           this.views.delete(item);
@@ -690,20 +929,19 @@ export class NookDock extends HTMLElement {
           record.view = this.view(item, item.getAttribute("name"));
           record.args = this.palette.mountForm(item, record.view.body);
         }
-        record.view.heading.textContent = item.getAttribute("name");
-        record.view.el.setAttribute("aria-label", item.getAttribute("name"));
+        this.i18n.text(record.view.heading, item.getAttribute("name"));
+        this.i18n.attr(record.view.el, "aria-label", item.getAttribute("name"));
         record.args.reconcile();
         continue;
       }
       const parent = item.parentElement.closest(tags);
       const root = item.root;
+      const topLevel = this.topLevelItems.includes(item);
       const destinations =
         item.localName === "nook-setting"
-          ? root
-            ? ["root"]
-            : ["settings"]
-          : root
-            ? ["root"]
+          ? [root ? "root" : "settings"]
+          : topLevel
+            ? [this.rootItems.includes(item) ? "root" : "full"]
             : parent && this.records.has(parent)
               ? [parent]
               : ["full"];
@@ -713,16 +951,15 @@ export class NookDock extends HTMLElement {
       if ((isPanel || isMenu) && !record.view) {
         record.view = this.view(item, label(item));
         if (isMenu) {
-          const grid = make("div", "items");
+          const grid = this.make("div", "items");
           grid.className = "items";
           record.view.body.append(grid);
           record.view.grid = grid;
         } else this.mountContent(item, record.view.body);
       }
       if (record.view) {
-        if (record.view.heading.textContent !== label(item))
-          record.view.heading.textContent = label(item);
-        record.view.el.setAttribute("aria-label", label(item));
+        this.i18n.text(record.view.heading, label(item));
+        this.i18n.attr(record.view.el, "aria-label", label(item));
       }
       if (isSetting) {
         const schema =
@@ -754,34 +991,30 @@ export class NookDock extends HTMLElement {
         "|" +
         bindingSupported(item.keybind, this.browserKeyboardLayout);
       if (record.signature !== signature) {
-        for (const button of [...record.buttons, record.quick].filter(
-          Boolean,
-        )) {
+        for (const button of [...record.buttons].filter(Boolean)) {
           if (isSetting) continue;
           const updated = this.itemButton(item, label(item));
           button.replaceChildren(...updated.childNodes);
-          button.setAttribute("aria-label", label(item));
+          this.i18n.attr(button, "aria-label", label(item));
         }
         record.signature = signature;
       }
       if (isSetting) {
         const text = record.control.querySelector("[part=setting-label]");
-        if (text.firstChild.textContent !== label(item))
-          text.firstChild.textContent = label(item);
+        this.i18n.text(text.firstChild, label(item));
         const description =
           item.getAttribute("description") || slotText(item, "description");
         let small = text.querySelector("small");
         if (description) {
           if (!small) {
-            small = make("small", "description");
+            small = this.make("small", "description");
             text.append(small);
           }
-          if (small.textContent !== description)
-            small.textContent = description;
+          this.i18n.text(small, description);
         } else small?.remove();
         const control = item._control;
         if (control) {
-          control.setAttribute("aria-label", label(item));
+          this.i18n.attr(control, "aria-label", label(item));
           if (control.type === "checkbox")
             control.checked = item.getAttribute("value") === "true";
           else if (
@@ -789,6 +1022,12 @@ export class NookDock extends HTMLElement {
             control.value !== item.getAttribute("value")
           )
             control.value = item.getAttribute("value");
+          if (item.hasAttribute("placeholder"))
+            this.i18n.attr(
+              control,
+              "placeholder",
+              item.getAttribute("placeholder"),
+            );
           for (const attr of ["min", "max", "step"]) {
             const value = item.getAttribute(attr);
             if (value !== null && control.getAttribute(attr) !== value)
@@ -820,8 +1059,7 @@ export class NookDock extends HTMLElement {
     if (
       feedbackButton &&
       !this.feedbackDisabled() &&
-      typeof this.feedback?.submit === "function" &&
-      !items.some((item) => item.hasAttribute("feedback"))
+      this.rootEntries.some((entry) => entry.id === "feedback")
     ) {
       const root = this.views.get("root").grid;
       const buttons = placements.get(root) || [];
@@ -835,78 +1073,82 @@ export class NookDock extends HTMLElement {
         cursor = button.nextSibling;
       }
     }
-    // Quick-strip mirrors are separate buttons; the persistent full menu is never
-    // moved into/out of the strip, preserving focus and panel/control identity.
-    const quickItems = items.filter(
-      (i) =>
-        !i.root &&
-        i.localName !== "nook-setting" &&
-        i.localName !== "nook-command" &&
-        !i.parentElement.closest(tags),
-    );
-    const capacity = Math.max(
-      1,
-      Math.floor(Math.min(innerWidth - 60, 380) / 72) - 1,
-    );
-    for (const [item, record] of this.records) {
-      const show = quickItems.slice(0, capacity).includes(item);
-      if (show && !record.quick) {
-        record.quick = this.itemButton(item, label(item));
-        record.quick.onclick = () => this.activate(item);
-        this.views.get("quick").grid.insertBefore(record.quick, this.more);
-      }
-      if (!show && record.quick) {
-        record.quick.remove();
-        record.quick = null;
-      }
-      if (record.quick) {
-        record.quick.setAttribute("aria-label", label(item));
-        const text = record.quick.querySelector(".item-label");
-        if (text.textContent !== label(item)) text.textContent = label(item);
-      }
-    }
-    let quickCursor = this.views.get("quick").grid.firstChild;
-    for (const item of quickItems.slice(0, capacity)) {
-      const button = this.records.get(item).quick;
-      if (button !== quickCursor)
-        this.views.get("quick").grid.insertBefore(button, quickCursor);
-      quickCursor = button.nextSibling;
-    }
     const customFeedback = items.some((item) => item.hasAttribute("feedback"));
     const feedbackEnabled =
       !this.feedbackDisabled() &&
       !customFeedback &&
       typeof this.feedback?.submit === "function";
-    this.builtins.get("feedback").hidden = !feedbackEnabled;
     this.feedbackUI?.setEnabled(feedbackEnabled);
     this.feedbackUI?.reconcile();
     if (!feedbackEnabled && this.state?.path.includes("feedback")) this.close();
-    this.builtins.get("quick").hidden = !quickItems.length;
-    this.builtins.get("settings").hidden = !items.some(
-      (i) => i.localName === "nook-setting" && !i.root,
-    );
+    this.builtins.get("quick").hidden = !this.overflowEntries.length;
     const commands = items.filter((item) => item.localName === "nook-command");
-    this.builtins.get("commands").hidden = !commands.length;
+    for (const id of ["feedback", "settings", "commands"])
+      this.builtins.get(id).hidden = !this.rootEntries.some(
+        (entry) => entry.id === id,
+      );
+    this.placeRootEntries();
+    const settings = this.views.get("settings");
+    settings.footer.hidden = !this.settingsHref;
+    if (this.settingsHref) {
+      if (settings.link.getAttribute("href") !== this.settingsHref)
+        settings.link.setAttribute("href", this.settingsHref);
+    } else settings.link.removeAttribute("href");
+    if (settings.body.lastChild !== settings.footer)
+      settings.body.append(settings.footer);
+    if (
+      !this.availableBuiltins.has("settings") &&
+      this.state?.path.includes("settings")
+    )
+      this.close();
     this.palette.reconcile(commands);
     if (!commands.length && this.state?.path.includes("commands")) this.close();
-    this.more.hidden = quickItems.length <= capacity;
     for (const [id, view] of this.views) {
       const kind =
         view.kind ||
         (typeof id === "string" ? id : id.localName.replace("nook-", ""));
-      const count = view.grid
-        ? [...view.grid.children].filter((node) => !node.hidden).length
-        : view.body.querySelectorAll(".setting").length;
+      const count =
+        id === "all"
+          ? this.allEntries.length
+          : id === "full"
+            ? this.overflowEntries.length
+            : view.grid
+              ? [...view.grid.children].filter((node) => !node.hidden).length
+              : view.body.querySelectorAll(".setting").length;
       const override =
         typeof id === "string"
-          ? this.getAttribute(`${id}-presentation`)
+          ? this.getAttribute(
+              id === "full" && this.hasAttribute("overflow-presentation")
+                ? "overflow-presentation"
+                : `${id}-presentation`,
+            )
           : id.getAttribute("presentation");
       view.presentation = presentation(kind, count, override);
+      if (id === "root" && !["compact", "expanded"].includes(override))
+        view.presentation = count > this.rootCapacity ? "expanded" : "compact";
+      if (view.grid && id !== "full" && id !== "all") {
+        const labelsVisible = id !== "root" || view.presentation === "expanded";
+        view.el.dataset.layout =
+          labelsVisible &&
+          [...view.grid.children].some(
+            (button) => (button.getAttribute("aria-label") || "").length > 48,
+          )
+            ? "list"
+            : "icons";
+      }
       view.el.dataset.presentation = view.presentation;
     }
     this.reconcileGroups();
 
     if (this.state) {
+      if (!this.allEntries.length && this.state.path.includes("all")) {
+        this.close();
+        return;
+      }
+      if (!this.overflowEntries.length && this.state.path.includes("full")) {
+        this.send({ type: "overflow-availability", available: false });
+        return;
+      }
       const valid = this.state.path.filter(
         (id) =>
           typeof id === "string" ||
@@ -917,15 +1159,142 @@ export class NookDock extends HTMLElement {
         return;
       }
       this.project(this.state, false);
+      if (
+        ["root", "full"].includes(focusedView) &&
+        this.state.path.at(-1) === focusedView &&
+        !this.focusables().includes(focused)
+      ) {
+        queueMicrotask(() => {
+          if (
+            this.state.path.at(-1) === focusedView &&
+            this.shadowRoot.activeElement === focused
+          )
+            (focusedView === "root" && !this.builtins.get("quick").hidden
+              ? this.builtins.get("quick")
+              : this.focusables()[0]
+            )?.focus();
+        });
+      }
+    }
+  }
+  planItems(items) {
+    const style = this.ownerDocument.defaultView.getComputedStyle(
+      this.rootMeasure,
+    );
+    const size = parseFloat(style.width) || 48;
+    const measuredGap = parseFloat(style.marginInlineEnd);
+    const gap = Number.isFinite(measuredGap) ? measuredGap : 8;
+    this.rootCapacity = Math.max(
+      1,
+      Math.min(
+        Math.max(
+          1,
+          parseInt(style.getPropertyValue("--nook-root-max-items"), 10) || 5,
+        ),
+        Math.floor(
+          ((this.anchorRect?.width ??
+            this.ownerDocument.defaultView.innerWidth) -
+            (this.position === "left-center" || this.position === "right-center"
+              ? (parseFloat(style.marginBlockStart) || 56) +
+                (parseFloat(style.marginBlockEnd) || 12) +
+                16
+              : 32) +
+            gap) /
+            (size + gap),
+        ),
+      ),
+    );
+    this.topLevelItems = items.filter(
+      (item) =>
+        !["nook-setting", "nook-command"].includes(item.localName) &&
+        (item.root || !item.parentElement.closest(tags)),
+    );
+    this.availableBuiltins = new Set();
+    if (
+      !this.feedbackDisabled() &&
+      typeof this.feedback?.submit === "function" &&
+      !items.some((item) => item.hasAttribute("feedback"))
+    )
+      this.availableBuiltins.add("feedback");
+    if (
+      this.settingsHref ||
+      items.some((item) => item.localName === "nook-setting" && !item.root)
+    )
+      this.availableBuiltins.add("settings");
+    if (items.some((item) => item.localName === "nook-command"))
+      this.availableBuiltins.add("commands");
+    const builtin = (id, priority) => ({
+      id,
+      priority: this.priorities?.[id] ?? priority,
+      group: "",
+    });
+    const entries = [
+      ...(this.availableBuiltins.has("feedback")
+        ? [builtin("feedback", 30)]
+        : []),
+      ...this.topLevelItems.map((item) => ({
+        id: item,
+        priority: item.hasAttribute("priority")
+          ? item.priority
+          : item.root
+            ? 100
+            : 0,
+        group: item.group.trim(),
+      })),
+      ...["settings", "commands"]
+        .filter((id) => this.availableBuiltins.has(id))
+        .map((id) => builtin(id, id === "settings" ? 20 : 10)),
+    ];
+    const pinnedSettings = items.filter(
+      (item) => item.localName === "nook-setting" && item.root,
+    ).length;
+    const plan = distributeItems(
+      entries,
+      Math.max(1, this.rootCapacity - pinnedSettings),
+    );
+    this.allEntries = distributeItems(
+      [
+        ...entries,
+        ...items
+          .filter((item) => item.localName === "nook-setting" && item.root)
+          .map((item) => ({
+            id: item,
+            priority: item.priority,
+            group: item.group.trim(),
+          })),
+      ],
+      Number.MAX_SAFE_INTEGER,
+    ).root;
+    this.rootEntries = plan.root;
+    this.overflowEntries = plan.overflow;
+    this.rootItems = plan.root
+      .map((entry) => entry.id)
+      .filter((id) => typeof id !== "string");
+    this.overflowItems = plan.overflow
+      .map((entry) => entry.id)
+      .filter((id) => typeof id !== "string");
+  }
+  placeRootEntries() {
+    const root = this.views.get("root").grid;
+    const launcher = this.builtins.get("quick");
+    if (launcher.parentNode !== root) root.append(launcher);
+    let cursor = launcher;
+    for (const entry of [...this.rootEntries].reverse()) {
+      const button =
+        typeof entry.id === "string"
+          ? this.builtins.get(entry.id)
+          : this.records.get(entry.id).buttons[0];
+      if (button.nextSibling !== cursor) root.insertBefore(button, cursor);
+      cursor = button;
     }
   }
   reconcileGroups() {
     // Only launch buttons are mirrored. Panels and setting controls have one
     // mounted instance, even when a menu is projected as nested sections.
     for (const [id, view] of this.views) {
-      if (!view.grid || id === "quick") continue;
+      if (!view.grid || id === "full" || id === "all") continue;
       if (!view.grouped) {
-        view.grouped = make("div", "groups");
+        view.grouped = this.make("div", "groups");
         view.grouped.className = "groups";
         view.body.append(view.grouped);
         view.groupNodes = new Map();
@@ -935,8 +1304,8 @@ export class NookDock extends HTMLElement {
         [...this.records.keys()].filter((item) => {
           if (["nook-setting", "nook-command"].includes(item.localName))
             return false;
-          if (parent === "root") return item.root;
-          if (item.root) return false;
+          if (parent === "root") return this.rootItems.includes(item);
+          if (this.topLevelItems.includes(item)) return false;
           const owner = item.parentElement.closest(tags);
           return parent === "full" ? !owner : owner === parent;
         });
@@ -948,10 +1317,10 @@ export class NookDock extends HTMLElement {
           let node = view.groupNodes.get(item);
           if (!node) {
             if (menu) {
-              const el = make("section", "group");
+              const el = this.make("section", "group");
               el.className = "group";
-              const heading = make("h3", "group-heading");
-              const body = make("div", "group-body");
+              const heading = this.make("h3", "group-heading");
+              const body = this.make("div", "group-body");
               body.className = "group-body";
               el.append(heading, body);
               node = { el, heading, body };
@@ -963,16 +1332,15 @@ export class NookDock extends HTMLElement {
             view.groupNodes.set(item, node);
           }
           if (menu) {
-            if (node.heading.textContent !== label(item))
-              node.heading.textContent = label(item);
-            node.el.setAttribute("aria-label", label(item));
+            this.i18n.text(node.heading, label(item));
+            this.i18n.attr(node.el, "aria-label", label(item));
             place(item, node.body);
           } else {
             const signature = this.records.get(item).signature;
             if (node.signature !== signature) {
               const updated = this.itemButton(item, label(item));
               node.el.replaceChildren(...updated.childNodes);
-              node.el.setAttribute("aria-label", label(item));
+              this.i18n.attr(node.el, "aria-label", label(item));
               node.signature = signature;
             }
           }
@@ -991,7 +1359,7 @@ export class NookDock extends HTMLElement {
               key === "feedback"
                 ? "Feedback"
                 : key === "quick"
-                  ? "Quick menu"
+                  ? "More"
                   : key === "commands"
                     ? "Commands"
                     : "Settings",
@@ -999,7 +1367,7 @@ export class NookDock extends HTMLElement {
                 key === "feedback"
                   ? "feedback"
                   : key === "quick"
-                    ? "menu"
+                    ? "more"
                     : key === "commands"
                       ? "commands"
                       : "settings",
@@ -1012,11 +1380,120 @@ export class NookDock extends HTMLElement {
           if (button.parentNode !== view.grouped) view.grouped.append(button);
         }
       }
+      if (id === "root") {
+        const ordered = this.rootEntries
+          .map((entry) =>
+            typeof entry.id === "string"
+              ? view.groupLaunchers.get(entry.id)
+              : view.groupNodes.get(entry.id)?.el,
+          )
+          .filter(Boolean);
+        if (this.overflowEntries.length)
+          ordered.push(view.groupLaunchers.get("quick"));
+        let cursor = view.grouped.firstChild;
+        for (const node of ordered) {
+          if (node !== cursor) view.grouped.insertBefore(node, cursor);
+          cursor = node.nextSibling;
+        }
+      }
+
       for (const [item, node] of view.groupNodes)
         if (!wanted.has(item)) {
           node.el.remove();
           view.groupNodes.delete(item);
         }
+    }
+    this.reconcileOverflow();
+  }
+  reconcileOverflow() {
+    this.reconcileActionList(this.views.get("full"), this.overflowEntries);
+    this.reconcileActionList(this.views.get("all"), this.allEntries);
+  }
+  reconcileActionList(view, entries) {
+    if (!view.grouped) {
+      view.grouped = this.make("div", "overflow-groups");
+      view.grouped.className = "overflow-groups";
+      view.body.append(view.grouped);
+      view.overflowButtons = new Map();
+      view.overflowGroups = new Map();
+    }
+    const wanted = new Set(this.allEntries.map((entry) => entry.id));
+    for (const [id, record] of view.overflowButtons) {
+      if (!wanted.has(id)) {
+        record.button.remove();
+        view.overflowButtons.delete(id);
+      } else record.button.hidden = true;
+    }
+    for (const section of view.overflowGroups.values())
+      section.el.hidden = true;
+    const buckets = new Map();
+    for (const entry of entries) {
+      if (!buckets.has(entry.group)) buckets.set(entry.group, []);
+      buckets.get(entry.group).push(entry);
+    }
+    const named = [...buckets.keys()].some(Boolean);
+    let groupCursor = view.grouped.firstChild;
+    for (const [group, entries] of buckets) {
+      let section = view.overflowGroups.get(group);
+      if (!section) {
+        const el = this.make("section", "overflow-group");
+        const heading = this.make("h3", "overflow-group-heading");
+        const body = this.make("div", "overflow-group-body");
+        el.append(heading, body);
+        section = { el, heading, body };
+        view.overflowGroups.set(group, section);
+      }
+      section.el.hidden = false;
+      section.heading.hidden = !group && !named;
+      this.i18n.text(section.heading, group || "Other");
+      if (section.el !== groupCursor)
+        view.grouped.insertBefore(section.el, groupCursor);
+      groupCursor = section.el.nextSibling;
+      let cursor = section.body.firstChild;
+      for (const entry of entries) {
+        const source = typeof entry.id === "string" ? null : entry.id;
+        const title = source
+          ? label(source)
+          : entry.id === "feedback"
+            ? "Feedback"
+            : entry.id === "commands"
+              ? "Commands"
+              : "Settings";
+        const signature = source ? this.records.get(source).signature : title;
+        let record = view.overflowButtons.get(entry.id);
+        if (!record) {
+          const button = this.itemButton(
+            source,
+            title,
+            icon(
+              entry.id === "feedback"
+                ? "feedback"
+                : entry.id === "commands"
+                  ? "commands"
+                  : "settings",
+            ),
+          );
+          button.onclick = () => {
+            if (source?.localName === "nook-setting") {
+              this.open("root");
+              queueMicrotask(() => source._control?.focus());
+            } else if (source) this.activate(source);
+            else this.builtins.get(entry.id).click();
+          };
+          record = { button, signature };
+          view.overflowButtons.set(entry.id, record);
+        }
+        if (record.signature !== signature) {
+          const updated = this.itemButton(source, title);
+          record.button.replaceChildren(...updated.childNodes);
+          this.i18n.attr(record.button, "aria-label", title);
+          record.signature = signature;
+        }
+        record.button.hidden = false;
+        if (record.button !== cursor)
+          section.body.insertBefore(record.button, cursor);
+        cursor = record.button.nextSibling;
+      }
     }
   }
   mountContent(item, body) {
@@ -1025,7 +1502,7 @@ export class NookDock extends HTMLElement {
         node instanceof HTMLTemplateElement &&
         (!node.hasAttribute("slot") || node.getAttribute("slot") === "content"),
     );
-    const content = make("div", "content");
+    const content = this.make("div", "content");
     content.className = "content";
     // Cloning is deliberate for inert templates. Live nodes are moved once so
     // addEventListener handlers and custom-element state survive navigation.
@@ -1050,7 +1527,8 @@ export class NookDock extends HTMLElement {
     const picker = enumPicker({
       source,
       view,
-      make,
+      make: this.make,
+      i18n: this.i18n,
       title,
       initialValue,
       open: () => this.send({ type: "enter", view: source }),
@@ -1074,12 +1552,14 @@ export class NookDock extends HTMLElement {
   setting(item) {
     const type = item.getAttribute("type") || "toggle";
     const isEnum = ["enum", "select"].includes(type);
-    const row = make(isEnum ? "div" : "label", "setting");
+    const row = this.make(isEnum ? "div" : "label", "setting");
     row.className = "setting";
-    const text = make("span", "setting-label", label(item));
+    const text = this.make("span", "setting-label");
+    text.append(this.make("span", "setting-name", label(item)));
     const description =
       item.getAttribute("description") || slotText(item, "description");
-    if (description) text.append(make("small", "description", description));
+    if (description)
+      text.append(this.make("small", "description", description));
     row.append(text);
     const custom = childSlot(item, "control");
     if (custom) {
@@ -1104,7 +1584,7 @@ export class NookDock extends HTMLElement {
       picker.reconcile();
       return row;
     }
-    const control = make("input", "control");
+    const control = this.make("input", "control");
     control.type = type === "toggle" ? "checkbox" : type;
     for (const attr of ["min", "max", "step"])
       if (item.hasAttribute(attr))
@@ -1113,7 +1593,7 @@ export class NookDock extends HTMLElement {
       control.checked = item.getAttribute("value") === "true";
     else if (item.hasAttribute("value"))
       control.value = item.getAttribute("value");
-    control.setAttribute("aria-label", label(item));
+    this.i18n.attr(control, "aria-label", label(item));
     item._control = control;
     control.addEventListener("input", () => {
       item.setAttribute("value", String(item.value));
@@ -1181,14 +1661,19 @@ export class NookDock extends HTMLElement {
   }
   project(state, focus = true) {
     const previousCorner = this.state?.corner;
+    const previousPreferred = this.state?.preferredPosition;
     const previous = this.state?.path.at(-1);
     this.state = state;
     const movable = this.canDrag();
     this.anchor.dataset.draggable = String(movable);
-    if (this.getAttribute("corner") !== state.corner) {
+    if (
+      this.getAttribute("corner") !== state.corner ||
+      this.getAttribute("position") !== state.corner
+    ) {
       this.reflectingCorner = true;
       try {
         this.setAttribute("corner", state.corner);
+        this.setAttribute("position", state.corner);
       } finally {
         this.reflectingCorner = false;
       }
@@ -1199,20 +1684,12 @@ export class NookDock extends HTMLElement {
     }
     if (this.pointer?.drag)
       this.updateDragPreview(this.pointer.lastX, this.pointer.lastY);
-    for (const button of this.views
-      .get("corners")
-      ?.body.querySelectorAll("[data-corner]") || []) {
-      button.disabled = !state.allowedCorners.includes(button.dataset.corner);
-      button.setAttribute(
-        "aria-pressed",
-        String(button.dataset.corner === state.corner),
-      );
-    }
     this.handle.classList.toggle(
       "inviting",
-      Boolean(state.needsIntro && !state.path.length),
+      Boolean(state.needsIntro && state.attentionActive),
     );
     this.anchor.dataset.corner = state.corner;
+    this.anchor.dataset.position = state.corner;
 
     const active = state.path.at(-1);
     if (active) this.dismissHandleTip();
@@ -1274,7 +1751,8 @@ export class NookDock extends HTMLElement {
     if (!active) delete this.anchor.dataset.numbering;
     if (active && this.anchor.dataset.numbering) this.showNumbers();
     this.handle.setAttribute("aria-expanded", String(Boolean(active)));
-    this.handle.setAttribute(
+    this.i18n.attr(
+      this.handle,
       "aria-label",
       active ? "Close Nook menu" : "Open Nook menu",
     );
@@ -1302,6 +1780,19 @@ export class NookDock extends HTMLElement {
       this.settleCorner();
       emit(this, "nook-corner-change", { corner: state.corner });
     }
+    if (
+      previousCorner &&
+      (previousCorner !== state.corner ||
+        previousPreferred !== state.preferredPosition)
+    )
+      emit(this, "nook-position-change", {
+        position: state.corner,
+        preferredPosition: state.preferredPosition,
+        reason:
+          previousPreferred !== state.preferredPosition
+            ? "preference"
+            : "availability",
+      });
   }
   focusables() {
     const view = this.views.get(this.state?.path.at(-1));
@@ -1351,9 +1842,11 @@ export class NookDock extends HTMLElement {
   }
   keydown(e) {
     if (e.defaultPrevented || e.isComposing) return;
+    if (this.feedbackUI?.capturing) return;
     this.lastKey = e.key;
     this.dismissHandleTip();
     this.altHeld = e.altKey || e.key === "Alt";
+    this.anchor.toggleAttribute("data-alt-held", this.altHeld);
     if (!e.repeat && (e.key === "Alt" || (e.key === "Shift" && e.altKey)))
       void this.refreshKeyboardLayout();
     if (e.altKey || e.key === "Alt") this.showNumbers();
@@ -1400,7 +1893,7 @@ export class NookDock extends HTMLElement {
         ? this.getAttribute("commands-keybind")
         : null;
       if (
-        !this.builtins.get("commands").hidden &&
+        this.surfaceAvailable("commands") &&
         (paletteBinding !== null
           ? bindingMatches(paletteBinding)
           : bindingMatches("Ctrl+Shift+P") || bindingMatches("Meta+Shift+P"))
@@ -1413,14 +1906,26 @@ export class NookDock extends HTMLElement {
       for (const [view, attr, fallback] of [
         ["root", "root-keybind", "Shift+?"],
         ["settings", "settings-keybind", "Alt+Shift+S"],
-        ["quick", "quick-keybind", "Alt+Shift+Q"],
+        ["all", "all-keybind", "Alt+Shift+M"],
+        [
+          "quick",
+          this.hasAttribute("overflow-keybind")
+            ? "overflow-keybind"
+            : "quick-keybind",
+          "Alt+Shift+Q",
+        ],
       ])
         if (
           bindingMatches(
             this.hasAttribute(attr) ? this.getAttribute(attr) : fallback,
           )
         ) {
-          if (view !== "root" && this.builtins.get(view).hidden) return;
+          if (
+            view === "quick"
+              ? !this.surfaceAvailable("full")
+              : view !== "root" && !this.surfaceAvailable(view)
+          )
+            return;
           e.preventDefault();
           this.open(view === "quick" ? "full" : view);
           return;
@@ -1429,7 +1934,7 @@ export class NookDock extends HTMLElement {
         i.hasAttribute("feedback"),
       );
       if (
-        (feedback || !this.builtins.get("feedback").hidden) &&
+        (feedback || this.surfaceAvailable("feedback")) &&
         bindingMatches(
           this.hasAttribute("feedback-keybind")
             ? this.getAttribute("feedback-keybind")
@@ -1515,6 +2020,7 @@ export class NookDock extends HTMLElement {
     if (!this.canDrag()) return;
     this.hold = setTimeout(() => {
       if (this.pointer && this.canDrag()) {
+        this.swipeDial?.cancel();
         this.pointer.drag = true;
         this.handle.classList.add("dragging");
         this.updateDragPreview(this.pointer.lastX, this.pointer.lastY);
@@ -1531,7 +2037,7 @@ export class NookDock extends HTMLElement {
     if (!p.drag && Math.hypot(dx, dy) > 10) clearTimeout(this.hold);
     if (p.drag) {
       this.updateDragPreview(e.clientX, e.clientY);
-    }
+    } else this.swipeDial?.move(p);
   }
   updateDragPreview(x, y) {
     if (!this.canDrag()) {
@@ -1539,13 +2045,19 @@ export class NookDock extends HTMLElement {
       return null;
     }
     const allowed =
-      this.state?.allowedCorners ||
-      availableCorners(this.getAttribute("disabled-corners"));
-    const corner = closestAllowedCorner(
-      x,
-      y,
-      this.ownerDocument.defaultView.innerWidth,
-      this.ownerDocument.defaultView.innerHeight,
+      this.state?.allowedPositions ||
+      availablePositions(this.blockedPositions());
+    const rect = this.anchorRect || {
+      left: 0,
+      top: 0,
+      width: this.ownerDocument.defaultView.innerWidth,
+      height: this.ownerDocument.defaultView.innerHeight,
+    };
+    const corner = closestAllowedPosition(
+      x - rect.left,
+      y - rect.top,
+      rect.width,
+      rect.height,
       allowed,
     );
     for (const [position, spot] of this.landingSpots) {
@@ -1560,7 +2072,9 @@ export class NookDock extends HTMLElement {
         [{ transform: "scale(.96)" }, { transform: "scale(1)" }],
         { token: "--nook-duration", fallback: 180 },
       );
-      this.live.textContent = `Release to move to ${corner.replace("-", " ")}.`;
+      this.i18n.text(this.live, "Release to move to {position}.", () => ({
+        position: this.i18n.t(corner.replace("-", " ")),
+      }));
     }
     return corner;
   }
@@ -1573,25 +2087,26 @@ export class NookDock extends HTMLElement {
     if (p.drag) {
       const corner = this.updateDragPreview(e.clientX, e.clientY);
       if (corner === this.state.corner) this.settleCorner();
-      this.setAttribute("corner", corner);
+      this.position = corner;
 
-      this.live.textContent = `Moved to ${corner.replace("-", " ")}.`;
+      this.i18n.text(this.live, "Moved to {position}.", () => ({
+        position: this.i18n.t(corner.replace("-", " ")),
+      }));
       this.suppressClick = true;
     } else {
+      const dialShown = this.swipeDial?.shown;
       const view = gesture(dx, dy);
-      if (view) {
-        this.suppressClick = true;
-        if (
-          view === "full"
-            ? !this.builtins.get("quick").hidden
-            : !this.builtins.get(view)?.hidden
-        )
-          this.open(view);
-      }
+      const destination = dialShown
+        ? this.swipeDial.release(e.clientX, e.clientY)
+        : view;
+      if (view || p.swipeStarted || dialShown) this.suppressClick = true;
+      if (destination && this.surfaceAvailable(destination))
+        this.open(destination);
     }
     this.cancelPointer();
   }
   cancelPointer() {
+    this.swipeDial?.cancel();
     clearTimeout(this.hold);
     const pointer = this.pointer;
     this.pointer = null;

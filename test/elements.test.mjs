@@ -6,6 +6,7 @@ const expect = (value) => ({
   toBeNull: () => assert.equal(value, null),
 });
 import { Window } from "happy-dom";
+import { positions } from "../src/bl/menu.js";
 // Happy DOM 18 retains mutation-delivery closures only through WeakRef. GC can
 // silently drop them while an observer is live. Native observers own callbacks
 // strongly, so pin these harness references until this test process tears down.
@@ -127,7 +128,7 @@ test("items appear and disappear in open and closed menus with stable buttons", 
   dock.append(extra);
   await settle();
   expect(dock.records.has(extra)).toBe(true);
-  const quick = dock.records.get(extra).quick;
+  const quick = dock.records.get(extra).buttons[0];
   extra.remove();
   await settle();
   expect(dock.records.has(extra)).toBe(false);
@@ -137,7 +138,7 @@ test("items appear and disappear in open and closed menus with stable buttons", 
   action.root = true;
   await settle();
   expect(button.parentNode).toBe(dock.views.get("root").grid);
-  expect(dock.records.get(action).quick).toBeNull();
+  expect(button.parentNode === dock.views.get("root").grid).toBe(true);
   dock.remove();
   await settle();
 });
@@ -243,8 +244,8 @@ test("source ordering, nested groups, and empty builtins reconcile live", async 
   const action = dock.querySelector("#action");
   dock.insertBefore(menu, action);
   await settle();
-  expect(dock.views.get("full").grid.firstChild).toBe(
-    dock.records.get(menu).buttons[0],
+  expect(dock.rootItems.indexOf(menu) < dock.rootItems.indexOf(action)).toBe(
+    true,
   );
   dock.querySelector("#setting").remove();
   await settle();
@@ -270,7 +271,8 @@ test("live content switches presentation without remounting existing items", asy
     additions.push(action);
   }
   await settle();
-  expect(root.el.dataset.presentation).toBe("expanded");
+  expect(root.el.dataset.presentation).toBe("compact");
+  expect(dock.overflowEntries.length > 0).toBe(true);
   expect(dock.records.get(panel).buttons[0]).toBe(button);
   additions.forEach((item) => item.remove());
   await settle();
@@ -499,8 +501,9 @@ test("unknown layout disables dependent bindings and Alt-number selection withou
 
 test("holding Alt reveals assigned numbers and plain numbers do not select items", async () => {
   const dock = fixture();
+  dock.querySelector("#action").priority = 1000;
   await settle();
-  dock.open("full");
+  dock.open("root");
   const button = dock.records.get(dock.querySelector("#action")).buttons[0];
   button.getClientRects = () => [{}];
   let selected = 0;
@@ -514,6 +517,7 @@ test("holding Alt reveals assigned numbers and plain numbers do not select items
     }),
   );
   await settle();
+  expect(dock.anchor.hasAttribute("data-alt-held")).toBe(true);
   expect(dock.anchor.dataset.numbering).toBe("true");
   expect(button.querySelector("[part=number]").textContent).toBe("1");
   document.dispatchEvent(
@@ -524,6 +528,7 @@ test("holding Alt reveals assigned numbers and plain numbers do not select items
     }),
   );
   expect(dock.anchor.dataset.numbering).toBe(undefined);
+  expect(dock.anchor.hasAttribute("data-alt-held")).toBe(false);
   document.dispatchEvent(
     new window.KeyboardEvent("keydown", {
       key: "1",
@@ -562,6 +567,7 @@ test("first opening pulses, introduces Nook, and remembers the introduction", as
     .body.querySelector("[part=tutorial-continue]")
     .click();
   expect(dock.state.path).toEqual(["root"]);
+  expect(dock.handle.classList.contains("inviting")).toBe(false);
   dock.remove();
   await settle();
   const again = fixture();
@@ -623,7 +629,9 @@ test("dragging previews its destination without moving the live arc and commits 
 test("disabled corners hide drag affordances, constrain preview, and cancel a now-locked drag", async () => {
   const dock = fixture();
   await settle();
-  dock.disabledCorners = ["top-left", "top-right", "bottom-left"];
+  dock.disabledPositions = positions.filter(
+    (position) => position !== "bottom-right",
+  );
   expect(dock.canDrag()).toBe(false);
   expect(dock.anchor.dataset.draggable).toBe("false");
   dock.handle.setPointerCapture = () => {};
@@ -633,6 +641,7 @@ test("disabled corners hide drag affordances, constrain preview, and cancel a no
   expect(dock.pointer.drag).toBe(false);
   expect(dock.preview.hidden).toBe(true);
   dock.cancelPointer();
+  dock.disabledPositions = [];
   dock.disabledCorners = ["top-left"];
   dock.pointerdown({
     button: 0,
@@ -646,13 +655,16 @@ test("disabled corners hide drag affordances, constrain preview, and cancel a no
   expect(dock.landingSpots.get("top-left").hidden).toBe(true);
   expect(
     [...dock.landingSpots.values()].filter((spot) => !spot.hidden).length,
-  ).toBe(3);
-  dock.disabledCorners = ["top-left", "top-right", "bottom-left"];
+  ).toBe(7);
+  dock.disabledPositions = positions.filter(
+    (position) => position !== "bottom-right",
+  );
   expect(dock.pointer).toBe(null);
   expect(dock.preview.hidden).toBe(true);
   expect([...dock.landingSpots.values()].every((spot) => spot.hidden)).toBe(
     true,
   );
+  dock.disabledPositions = [];
   dock.disabledCorners = ["bottom-right"];
   expect(dock.state.corner === "bottom-right").toBe(false);
   expect(dock.getAttribute("corner")).toBe(dock.state.corner);
@@ -829,7 +841,9 @@ test("feedback preserves failed drafts, excludes Nook during capture, and preven
   message.value = "The toolbar overlaps my editor";
   body.querySelector("[role=radio]").click();
   await body.querySelector("[part=feedback-capture]").onclick();
-  expect(captureArgs.exclude).toEqual([dock]);
+  await dock.shadowRoot.querySelector("[part=capture-snapshot]").onclick();
+  dock.shadowRoot.querySelector("[part=capture-done]").click();
+  expect(captureArgs.exclude).toEqual(dock.captureExclusions);
   expect(dock.hasAttribute("data-nook-capturing")).toBe(false);
   expect(body.querySelectorAll("[part=feedback-attachment]").length).toBe(1);
   ui.form.dispatchEvent(
@@ -884,7 +898,10 @@ test("feedback file hooks stage removable attachments and disable aborts capture
   expect(body.querySelectorAll("[part=feedback-attachment]").length).toBe(1);
   body.querySelector("[part=feedback-remove]").click();
   expect(body.querySelectorAll("[part=feedback-attachment]").length).toBe(0);
-  const pending = body.querySelector("[part=feedback-capture]").onclick();
+  body.querySelector("[part=feedback-capture]").click();
+  const pending = dock.shadowRoot
+    .querySelector("[part=capture-snapshot]")
+    .onclick();
   expect(dock.hasAttribute("data-nook-capturing")).toBe(true);
   dock.feedback = false;
   expect(captureSignal.aborted).toBe(true);
@@ -901,8 +918,6 @@ test("tutorial labels and templates customize live while preserving device regio
   dock.tutorial = {
     title: "Workspace extras",
     continueLabel: "Continue",
-    helpTitle: "Workspace guide",
-    moveLabel: "Reposition",
   };
   const desktop = document.createElement("template");
   desktop.slot = "tutorial-desktop";
@@ -928,8 +943,7 @@ test("tutorial labels and templates customize live while preserving device regio
       .querySelector('[part="tutorial-touch"]')
       .classList.contains("touch-only"),
   ).toBe(true);
-  expect(dock.views.get("help").heading.textContent).toBe("Workspace guide");
-  dock.open("help");
+  dock.open("welcome");
   dock.close();
   dock.tutorial = { ...dock.tutorial, title: "Updated title" };
   await settle();
@@ -957,5 +971,603 @@ test("tutorial labels and templates customize live while preserving device regio
     keyboard.textContent.includes("A small corner for useful extras."),
   ).toBe(true);
   expect(welcome.heading.textContent).toBe("Welcome to Nook");
-  expect(dock.views.get("help").heading.textContent).toBe("Meet Nook");
+});
+
+test("priority allocation fills root and groups overflow without losing item identity", async () => {
+  const dock = fixture();
+  const extra = (label, priority, group) => {
+    const action = document.createElement("nook-action");
+    action.setAttribute("label", label);
+    action.priority = priority;
+    action.group = group;
+    dock.append(action);
+    return action;
+  };
+  const work = extra("Work", 90, "Workspace");
+  const tools = extra("Tools", 80, "Workspace");
+  const support = extra("Support", -10, "Support");
+  await settle();
+  const first = dock.querySelector("#action");
+  const original = dock.records.get(first).buttons[0];
+  expect(dock.rootItems.includes(work)).toBe(true);
+  expect(dock.rootItems.includes(tools)).toBe(true);
+  expect(dock.overflowItems.includes(first)).toBe(true);
+  expect(dock.overflowItems.includes(support)).toBe(true);
+  expect(dock.builtins.get("quick").hidden).toBe(false);
+  const overflow = dock.views.get("full");
+  const button = overflow.overflowButtons.get(support).button;
+  expect(overflow.overflowGroups.get("Support").el.hidden).toBe(false);
+  support.group = "Workspace";
+  await settle();
+  expect(overflow.overflowButtons.get(support).button === button).toBe(true);
+  expect(
+    button.parentNode === overflow.overflowGroups.get("Workspace").body,
+  ).toBe(true);
+  first.priority = 300;
+  await settle();
+  expect(dock.records.get(first).buttons[0] === original).toBe(true);
+  expect(original.parentNode === dock.views.get("root").grid).toBe(true);
+  let chosen;
+  dock.addEventListener(
+    "nook-action",
+    (event) => (chosen = event.detail.source),
+  );
+  dock.open("overflow");
+  button.click();
+  expect(chosen === support).toBe(true);
+  support.remove();
+  tools.remove();
+  work.remove();
+  await settle();
+  expect(dock.overflowEntries.length).toBe(0);
+  expect(dock.builtins.get("quick").hidden).toBe(true);
+  expect(dock.rootItems.includes(first)).toBe(true);
+  expect(button.isConnected).toBe(false);
+});
+
+test("resizing and builtin priorities rebalance root while settings remain accessible", async () => {
+  const width = window.innerWidth;
+  try {
+    window.innerWidth = 280;
+    const dock = fixture();
+    for (let i = 0; i < 3; i++) {
+      const item = document.createElement("nook-action");
+      item.setAttribute("label", `Extra ${i}`);
+      item.priority = 50 - i;
+      dock.append(item);
+    }
+    await settle();
+    expect(dock.rootEntries.length).toBe(3);
+    expect(dock.overflowEntries.some((entry) => entry.id === "settings")).toBe(
+      true,
+    );
+    expect(dock.surfaceAvailable("settings")).toBe(true);
+    dock.open("overflow");
+    dock.views.get("full").overflowButtons.get("settings").button.click();
+    expect(dock.state.path.at(-1)).toBe("settings");
+    dock.priorities = { settings: 200 };
+    await settle();
+    expect(dock.rootEntries[0].id).toBe("settings");
+    window.innerWidth = 1024;
+    window.dispatchEvent(new Event("resize"));
+    await settle();
+    expect(dock.rootEntries.length).toBe(4);
+    expect(dock.views.get("root").presentation).toBe("compact");
+  } finally {
+    window.innerWidth = width;
+  }
+});
+
+test("an emptied overflow returns to root without discarding an open child panel", async () => {
+  const dock = fixture();
+  const panel = document.createElement("nook-panel");
+  panel.setAttribute("label", "Draft");
+  panel.priority = -100;
+  panel.innerHTML = '<template slot="content"><input value="start"></template>';
+  dock.append(panel);
+  const additions = [];
+  for (let i = 0; i < 3; i++) {
+    const action = document.createElement("nook-action");
+    action.priority = 40;
+    action.setAttribute("label", `Extra ${i}`);
+    dock.append(action);
+    additions.push(action);
+  }
+  await settle();
+  dock.open("overflow");
+  dock.views.get("full").overflowButtons.get(panel).button.click();
+  const input = dock.views.get(panel).body.querySelector("input");
+  input.value = "retained";
+  additions.forEach((item) => item.remove());
+  await settle();
+  expect(dock.state.path.at(-1) === panel).toBe(true);
+  expect(dock.state.path.includes("full")).toBe(false);
+  expect(input.value).toBe("retained");
+  dock.send({ type: "back" });
+  expect(dock.state.path.at(-1)).toBe("root");
+});
+
+test("Alt tooltip suppression survives a pending layout refresh and clears on blur", async () => {
+  const dock = fixture();
+  await settle();
+  dock.open();
+  let resolveLayout;
+  keyboard.getLayoutMap = () =>
+    new Promise((resolve) => {
+      resolveLayout = resolve;
+    });
+  document.dispatchEvent(
+    new window.KeyboardEvent("keydown", {
+      key: "Alt",
+      altKey: true,
+      bubbles: true,
+    }),
+  );
+  expect(dock.anchor.hasAttribute("data-alt-held")).toBe(true);
+  expect(dock.browserKeyboardLayout).toBe(undefined);
+  expect(dock.anchor.dataset.numbering).toBe(undefined);
+  window.dispatchEvent(new Event("blur"));
+  expect(dock.anchor.hasAttribute("data-alt-held")).toBe(false);
+  resolveLayout(layout);
+  await settle();
+  expect(dock.anchor.dataset.numbering).toBe(undefined);
+});
+
+test("edge-center anchors reflect position, preview eight targets, and respect blocked positions", async () => {
+  const dock = fixture();
+  await settle();
+  expect(dock.landingSpots.size).toBe(8);
+  let changed;
+  dock.addEventListener(
+    "nook-position-change",
+    (event) => (changed = event.detail.position),
+  );
+  dock.position = "left-center";
+  expect(dock.state.corner).toBe("left-center");
+  expect(dock.anchor.dataset.position).toBe("left-center");
+  expect(dock.getAttribute("corner")).toBe("left-center");
+  expect(changed).toBe("left-center");
+  dock.disabledPositions = positions.filter(
+    (position) => position !== "top-center",
+  );
+  expect(dock.position).toBe("top-center");
+  expect(dock.canDrag()).toBe(false);
+  dock.disabledPositions = [];
+  expect(dock.position).toBe("left-center");
+  dock.position = "top-center";
+  dock.handle.setPointerCapture = () => {};
+  dock.handle.hasPointerCapture = () => false;
+  dock.pointerdown({
+    button: 0,
+    pointerId: 91,
+    clientX: window.innerWidth / 2,
+    clientY: 10,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 470));
+  dock.pointermove({
+    pointerId: 91,
+    clientX: window.innerWidth - 5,
+    clientY: window.innerHeight / 2,
+  });
+  expect(dock.preview.dataset.corner).toBe("right-center");
+  expect(dock.position).toBe("top-center");
+  dock.pointerup({
+    pointerId: 91,
+    clientX: window.innerWidth - 5,
+    clientY: window.innerHeight / 2,
+  });
+  expect(dock.position).toBe("right-center");
+});
+
+test("library supplies the first-use tutorial without a guide or corner-picker menu", async () => {
+  const dock = fixture();
+  await settle();
+  dock.open();
+  expect(dock.views.has("help")).toBe(false);
+  expect(dock.views.has("corners")).toBe(false);
+  expect(
+    dock.shadowRoot.querySelector(
+      '[part="move-button"],[part="corner-option"]',
+    ),
+  ).toBe(null);
+  dock.open("help");
+  expect(dock.state.path).toEqual(["root"]);
+  dock.open("corners");
+  expect(dock.state.path).toEqual(["root"]);
+});
+
+test("viewport changes preserve preferred anchors and ignore height-only resizing while editing", async () => {
+  const width = window.innerWidth,
+    height = window.innerHeight;
+  try {
+    const dock = fixture();
+    await settle();
+    dock.positionMedia = { matches: true };
+    window.innerWidth = 844;
+    window.innerHeight = 390;
+    window.dispatchEvent(new Event("resize"));
+    dock.position = "top-center";
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    window.dispatchEvent(new Event("resize"));
+    expect(dock.position).toBe("top-left");
+    expect(dock.preferredPosition).toBe("top-center");
+    const setting = document.createElement("nook-setting");
+    setting.setAttribute("type", "text");
+    setting.setAttribute("label", "Draft");
+    dock.append(setting);
+    await settle();
+    dock.open("settings");
+    setting._control.focus();
+    setting._control.value = "Keep this draft";
+    window.innerHeight = 300;
+    window.dispatchEvent(new Event("resize"));
+    expect(dock.availablePositions.includes("top-center")).toBe(false);
+    window.innerWidth = 844;
+    window.innerHeight = 390;
+    window.dispatchEvent(new Event("resize"));
+    expect(dock.position).toBe("top-center");
+    expect(setting._control.value).toBe("Keep this draft");
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    window.dispatchEvent(new Event("resize"));
+    expect(dock.position).toBe("top-left");
+    let detail;
+    dock.addEventListener(
+      "nook-position-change",
+      (event) => (detail = event.detail),
+    );
+    dock.position = "top-left";
+    expect(dock.preferredPosition).toBe("top-left");
+    expect(detail.reason).toBe("preference");
+    window.innerWidth = 844;
+    window.innerHeight = 390;
+    window.dispatchEvent(new Event("resize"));
+    expect(dock.position).toBe("top-left");
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    window.dispatchEvent(new Event("resize"));
+    dock.position = "top-center";
+    dock.setAttribute("position-policy", "all");
+    expect(dock.position).toBe("top-center");
+    dock.disabledPositions = ["top-center"];
+    expect(dock.availablePositions.includes("top-center")).toBe(false);
+  } finally {
+    window.innerWidth = width;
+    window.innerHeight = height;
+  }
+});
+
+test("the dense action fixture reconciles priorities and retains mounted panel state", async () => {
+  const { populateStress } = await import("../demo/stress.js");
+  const dock = fixture();
+  populateStress(dock, "actions");
+  await settle();
+  expect(
+    dock.querySelectorAll('nook-action[id^="stress-action-"]').length,
+  ).toBe(80);
+  expect(dock.overflowEntries.length > 75).toBe(true);
+  const item = dock.querySelector("#stress-action-79");
+  const button = dock.records.get(item).buttons[0];
+  const panel = dock.querySelector("#stress-panel");
+  const body = dock.views.get(panel).body;
+  const field = document.createElement("input");
+  field.value = "retained dense draft";
+  body.append(field);
+  dock.open(panel);
+  item.priority = 9999;
+  await settle();
+  expect(dock.rootItems[0] === item).toBe(true);
+  expect(dock.records.get(item).buttons[0] === button).toBe(true);
+  expect(dock.views.get(panel).body.contains(field)).toBe(true);
+  expect(field.value).toBe("retained dense draft");
+  expect(
+    dock.views.get(dock.querySelector("#stress-menu")).el.dataset.layout,
+  ).toBe("list");
+});
+
+test("localization updates existing controls and labels without losing drafts", async () => {
+  const dock = fixture();
+  await settle();
+  dock.activate(dock.querySelector("#panel"));
+  const input = dock.views
+    .get(dock.querySelector("#panel"))
+    .body.querySelector("input");
+  input.value = "unfinished";
+  const action = dock.records.get(dock.querySelector("#action"));
+  dock.localization = {
+    locale: "es",
+    catalogue: {
+      nook: {
+        Share: "Compartir",
+        Feedback: "Comentarios",
+        Settings: "Ajustes",
+      },
+    },
+  };
+  await settle();
+  assert.equal(dock.locale, "es");
+  assert.equal(dock.records.get(dock.querySelector("#action")), action);
+  assert.equal(input.value, "unfinished");
+  assert.ok(dock.shadowRoot.textContent.includes("Compartir"));
+  dock.localization = { locale: "en" };
+  await settle();
+  assert.equal(input.value, "unfinished");
+  assert.ok(dock.shadowRoot.textContent.includes("Share"));
+});
+
+test("capture sessions accumulate, review and remove snapshots, then restore the draft", async () => {
+  const dock = fixture();
+  dock.querySelector("[feedback]").remove();
+  dock.feedback = {
+    submit: async () => {},
+    captureScreenshot: async () =>
+      new File(["shot"], "screen.png", { type: "image/png" }),
+  };
+  await settle();
+  dock.open("feedback");
+  const body = dock.views.get("feedback").body;
+  body.querySelector("textarea").value = "keep this";
+  body.querySelector("[part=feedback-capture]").click();
+  const shadow = dock.shadowRoot;
+  assert.equal(dock.feedbackUI.capturing, true);
+  await shadow.querySelector("[part=capture-snapshot]").onclick();
+  await shadow.querySelector("[part=capture-snapshot]").onclick();
+  assert.equal(
+    shadow.querySelector("[part=capture-review]").getAttribute("aria-label"),
+    "2 snapshots",
+  );
+  assert.equal(shadow.querySelector("[part=capture-count]").textContent, "2");
+  assert.equal(shadow.querySelector("[part=capture-gallery]").hidden, true);
+  shadow.querySelector("[part=capture-review]").click();
+  assert.equal(shadow.querySelector("[part=capture-gallery]").hidden, false);
+  assert.equal(shadow.querySelectorAll("[part=capture-thumbnail]").length, 2);
+  shadow.querySelector("[part=capture-remove]").click();
+  assert.equal(
+    shadow.querySelector("[part=capture-review]").getAttribute("aria-label"),
+    "1 snapshot",
+  );
+  shadow.querySelector("[part=capture-done]").click();
+  assert.equal(dock.feedbackUI.capturing, false);
+  assert.equal(body.querySelector("textarea").value, "keep this");
+  assert.equal(body.querySelectorAll("[part=feedback-attachment]").length, 1);
+});
+
+test("wrapped apps remain live while bounds follow the dock and viewport opt-out", async () => {
+  const dock = document.createElement("nook-dock");
+  const app = document.createElement("main");
+  app.innerHTML = '<input value="draft">';
+  dock.append(app);
+  dock.getBoundingClientRect = () => ({
+    left: 20,
+    top: 80,
+    right: 360,
+    bottom: 650,
+    width: 340,
+    height: 570,
+  });
+  document.body.append(dock);
+  await settle();
+  assert.equal(dock.anchorRect.wrapped, true);
+  assert.equal(dock.anchorRect.top, 80);
+  assert.equal(dock.anchorRect.width, 340);
+  assert.equal(dock.captureRoot, app);
+  assert.equal(dock.shadowRoot.querySelector("[part=app]").localName, "slot");
+  assert.equal(dock.captureExclusions.includes(dock), false);
+  assert.equal(app.querySelector("input").value, "draft");
+  dock.setAttribute("boundary", "viewport");
+  await settle();
+  assert.equal(dock.anchorRect.wrapped, false);
+  assert.equal(dock.anchorRect.top, 0);
+  assert.equal(app.querySelector("input").value, "draft");
+});
+
+test("all actions includes root and overflow items and reconciles removals live", async () => {
+  const dock = fixture();
+  await settle();
+  dock.open("all");
+  await settle();
+  const all = dock.views.get("all");
+  assert.equal(all.el.hidden, false);
+  assert.ok(all.body.textContent.includes("Share"));
+  assert.ok(all.body.textContent.includes("Feedback"));
+  dock.querySelector("#action").remove();
+  await settle();
+  assert.equal(all.body.textContent.includes("Share"), false);
+});
+
+test("releasing a held dial outside its options cancels without a fast-swipe fallback", async () => {
+  const dock = fixture();
+  await settle();
+  dock.handle.setPointerCapture = () => {};
+  dock.handle.hasPointerCapture = () => false;
+  dock.pointerdown({ button: 0, pointerId: 91, clientX: 900, clientY: 700 });
+  dock.pointermove({ pointerId: 91, clientX: 820, clientY: 620 });
+  await new Promise((resolve) => setTimeout(resolve, 210));
+  assert.equal(dock.swipeDial.shown, true);
+  dock.pointerup({ pointerId: 91, clientX: 700, clientY: 400 });
+  assert.deepEqual(dock.state.path, []);
+  assert.equal(dock.suppressClick, true);
+  assert.equal(dock.swipeDial.shown, false);
+});
+
+test("horizontal and diagonal swipes open all actions even without root overflow", async () => {
+  const dock = document.createElement("nook-dock");
+  dock.innerHTML = '<nook-action label="Only action"></nook-action>';
+  document.body.append(dock);
+  await settle();
+  assert.equal(dock.surfaceAvailable("full"), false);
+  dock.handle.setPointerCapture = () => {};
+  dock.handle.hasPointerCapture = () => false;
+  for (const [dx, dy] of [
+    [-90, 0],
+    [-90, -90],
+  ]) {
+    dock.pointerdown({ button: 0, pointerId: 92, clientX: 900, clientY: 700 });
+    dock.pointermove({ pointerId: 92, clientX: 900 + dx, clientY: 700 + dy });
+    dock.pointerup({ pointerId: 92, clientX: 900 + dx, clientY: 700 + dy });
+    await settle();
+    assert.deepEqual(dock.state.path, ["all"]);
+    assert.equal(dock.views.get("all").el.hidden, false);
+    dock.close();
+    await settle();
+  }
+});
+
+test("keyboard resizing a wrapped app preserves anchor policy while a light DOM editor is focused", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(window, "visualViewport");
+  const viewport = new window.EventTarget();
+  Object.assign(viewport, {
+    offsetLeft: 0,
+    offsetTop: 0,
+    width: 390,
+    height: 844,
+  });
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: viewport,
+  });
+  const dock = document.createElement("nook-dock");
+  try {
+    dock.innerHTML =
+      '<main><input value="Keep this draft"></main><nook-action label="Share"></nook-action>';
+    dock.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      right: 390,
+      bottom: 844,
+      width: 390,
+      height: 844,
+    });
+    document.body.append(dock);
+    await settle();
+    dock.positionMedia = { matches: true };
+    dock.refreshPositions();
+    dock.position = "top-center";
+    assert.equal(dock.position, "top-left");
+    const input = dock.querySelector("input");
+    input.focus();
+    viewport.height = 300;
+    viewport.dispatchEvent(new window.Event("resize"));
+    await settle();
+    assert.equal(dock.anchorRect.bottom, 300);
+    assert.equal(dock.position, "top-left");
+    assert.equal(dock.preferredPosition, "top-center");
+    assert.equal(input.value, "Keep this draft");
+    viewport.height = 844;
+    viewport.dispatchEvent(new window.Event("resize"));
+    await settle();
+    assert.equal(dock.anchorRect.bottom, 844);
+  } finally {
+    dock.remove();
+    if (descriptor) Object.defineProperty(window, "visualViewport", descriptor);
+    else delete window.visualViewport;
+  }
+});
+
+test("settings link updates live below controls without replacing drafts and localizes its label", async () => {
+  const dock = fixture();
+  const setting = document.createElement("nook-setting");
+  setting.setAttribute("label", "Draft");
+  setting.setAttribute("type", "text");
+  dock.append(setting);
+  await settle();
+  dock.open("settings");
+  const view = dock.views.get("settings"),
+    link = view.link,
+    control = setting._control;
+  control.value = "Keep this draft";
+  assert.equal(view.footer.hidden, true);
+  dock.settingsHref = "/app/settings";
+  await settle();
+  assert.equal(dock.getAttribute("settings-href"), "/app/settings");
+  assert.equal(link.getAttribute("href"), "/app/settings");
+  assert.equal(view.footer.hidden, false);
+  assert.equal(view.body.lastElementChild, view.footer);
+  assert.equal(link.textContent, "All settings");
+  dock.setAttribute("settings-href", "/account/settings");
+  await settle();
+  assert.equal(dock.settingsHref, "/account/settings");
+  assert.equal(view.link, link);
+  assert.equal(link.getAttribute("href"), "/account/settings");
+  const another = document.createElement("nook-setting");
+  another.setAttribute("label", "Another");
+  dock.append(another);
+  await settle();
+  assert.equal(view.body.lastElementChild, view.footer);
+  dock.localization = {
+    locale: "es",
+    catalogue: { nook: { "All settings": "Todos los ajustes" } },
+  };
+  await settle();
+  assert.equal(link.textContent, "Todos los ajustes");
+  assert.equal(setting._control, control);
+  assert.equal(control.value, "Keep this draft");
+  dock.settingsHref = null;
+  await settle();
+  assert.equal(view.footer.hidden, true);
+  assert.equal(link.hasAttribute("href"), false);
+  assert.deepEqual(dock.state.path, ["settings"]);
+  assert.equal(control.value, "Keep this draft");
+});
+
+test("a full settings link alone enables Settings and removing it withdraws the empty view", async () => {
+  const dock = document.createElement("nook-dock");
+  dock.setAttribute("settings-href", "/settings");
+  document.body.append(dock);
+  await settle();
+  assert.equal(dock.surfaceAvailable("settings"), true);
+  assert.ok(dock.rootEntries.some((entry) => entry.id === "settings"));
+  dock.open("settings");
+  await settle();
+  const view = dock.views.get("settings");
+  assert.equal(view.el.hidden, false);
+  assert.equal(view.footer.hidden, false);
+  assert.equal(view.link.getAttribute("href"), "/settings");
+  dock.settingsHref = "";
+  await settle();
+  assert.equal(dock.hasAttribute("settings-href"), false);
+  assert.equal(dock.surfaceAvailable("settings"), false);
+  assert.deepEqual(dock.state.path, []);
+  assert.equal(view.footer.hidden, true);
+});
+
+test("stress feedback fixtures project an injected screenshot hook in both feedback scenarios", async () => {
+  const { populateStress } = await import("../demo/stress.js");
+  const dock = fixture();
+  let calls = 0;
+  const captureScreenshot = async () => {
+    calls++;
+    return new File(["shot"], "stress.png", { type: "image/png" });
+  };
+  for (const scenario of ["mixed", "feedback"]) {
+    dock.feedback = false;
+    populateStress(dock, scenario, { captureScreenshot });
+    await settle();
+    dock.open("feedback");
+    await settle();
+    const button = dock.views
+      .get("feedback")
+      .body.querySelector("[part=feedback-capture]");
+    assert.equal(button.hidden, false);
+    button.click();
+    assert.equal(dock.feedbackUI.capturing, true);
+    await dock.shadowRoot.querySelector("[part=capture-snapshot]").onclick();
+    dock.shadowRoot.querySelector("[part=capture-done]").click();
+    assert.equal(
+      dock.views
+        .get("feedback")
+        .body.querySelectorAll("[part=feedback-attachment]").length,
+      1,
+    );
+  }
+  assert.equal(calls, 2);
+  dock.feedback = false;
+  populateStress(dock, "feedback");
+  await settle();
+  assert.equal(
+    dock.views.get("feedback").body.querySelector("[part=feedback-capture]")
+      .hidden,
+    true,
+  );
 });

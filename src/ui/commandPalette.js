@@ -5,6 +5,7 @@ import { commandMatches, argumentValues } from "../bl/commands.js";
 export default function commandPalette({
   view,
   make,
+  i18n,
   choose,
   run,
   supported,
@@ -13,8 +14,8 @@ export default function commandPalette({
   const search = make("input", "command-search");
   search.type = "search";
   search.className = "command-search";
-  search.placeholder = "Search commands…";
-  search.setAttribute("aria-label", "Search commands");
+  i18n.attr(search, "placeholder", "Search commands…");
+  i18n.attr(search, "aria-label", "Search commands");
   search.autocomplete = "off";
   const list = make("div", "command-list");
   list.className = "command-list";
@@ -37,17 +38,24 @@ export default function commandPalette({
   const visible = () => order.filter((record) => !record.button.hidden);
   const highlight = (record) => {
     active = record;
-    status.textContent = record
-      ? `${record.name.textContent}. ${record.description.textContent}`
-      : "";
+    i18n.text(
+      status,
+      record ? "{name}. {description}" : "",
+      record
+        ? () => ({
+            name: record.name.textContent,
+            description: record.description.textContent,
+          })
+        : undefined,
+    );
     for (const candidate of records.values())
       candidate.button.dataset.active = String(candidate === record);
   };
   const filter = () => {
     for (const [source, record] of records) {
       record.button.hidden = !commandMatches(
-        source.getAttribute("name"),
-        source.getAttribute("description"),
+        record.name.textContent,
+        record.description.textContent,
         search.value,
       );
     }
@@ -109,14 +117,13 @@ export default function commandPalette({
         }
         const name = source.getAttribute("name").trim(),
           description = source.getAttribute("description").trim();
-        if (record.name.textContent !== name) record.name.textContent = name;
-        if (record.description.textContent !== description)
-          record.description.textContent = description;
+        i18n.text(record.name, name);
+        i18n.text(record.description, description);
         const binding = source.getAttribute("keybind") || "";
         if (record.binding.textContent !== binding)
           record.binding.textContent = binding;
         record.binding.hidden = !binding || !supported(binding);
-        record.button.setAttribute("aria-label", name);
+        i18n.attr(record.button, "aria-label", name);
         if (record.button !== cursor) list.insertBefore(record.button, cursor);
         cursor = record.button.nextSibling;
       }
@@ -147,7 +154,7 @@ export default function commandPalette({
           for (const record of controls.values()) record.enum?.dispose();
         },
         reconcile() {
-          description.textContent = source.getAttribute("description");
+          i18n.text(description, source.getAttribute("description"));
           const args = [...source.querySelectorAll("nook-arg")].filter(
             (arg) =>
               arg.closest("nook-command") === source &&
@@ -202,7 +209,7 @@ export default function commandPalette({
             }
             const { row, caption, control } = record;
             const title = arg.getAttribute("label") || arg.getAttribute("name");
-            if (caption.textContent !== title) caption.textContent = title;
+            i18n.text(caption, title);
             control.name = arg.getAttribute("name");
             control.required = arg.hasAttribute("required");
             control.disabled = arg.hasAttribute("disabled");
@@ -215,6 +222,7 @@ export default function commandPalette({
             ]) {
               const value = arg.getAttribute(key);
               if (value === null) control.removeAttribute(key);
+              else if (key === "placeholder") i18n.attr(control, key, value);
               else control.setAttribute(key, value);
             }
             record.enum?.reconcile();

@@ -24,6 +24,7 @@ export default function enumPicker({
   source,
   view,
   make,
+  i18n,
   title,
   open,
   close,
@@ -91,9 +92,10 @@ export default function enumPicker({
   proxy.addEventListener("invalid", (event) => {
     event.preventDefault();
     trigger.setAttribute("aria-invalid", "true");
-    error.textContent = proxy.value
-      ? "This option is no longer available."
-      : "Choose an option.";
+    i18n.text(
+      error,
+      proxy.value ? "This option is no longer available." : "Choose an option.",
+    );
     error.hidden = false;
     trigger.focus();
   });
@@ -147,7 +149,8 @@ export default function enumPicker({
         ...candidates.slice(start + 1),
         ...candidates.slice(0, start + 1),
       ].find((record) =>
-        optionLabel(record.source)
+        i18n
+          .t(optionLabel(record.source))
           .toLocaleLowerCase()
           .startsWith(event.key.toLocaleLowerCase()),
       );
@@ -166,10 +169,10 @@ export default function enumPicker({
   });
   function reconcile() {
     const heading = title();
-    view.heading.textContent = heading;
-    view.el.setAttribute("aria-label", heading);
-    trigger.setAttribute("aria-label", heading);
-    list.setAttribute("aria-label", heading);
+    i18n.text(view.heading, heading);
+    i18n.attr(view.el, "aria-label", heading);
+    i18n.attr(trigger, "aria-label", heading);
+    i18n.attr(list, "aria-label", heading);
     const nodes = [...source.querySelectorAll("nook-option,option")].filter(
       (node) =>
         !node.hidden && node.closest("nook-setting,nook-arg") === source,
@@ -221,8 +224,8 @@ export default function enumPicker({
         record.button.replaceChildren(contents, check);
         record.signature = node.outerHTML;
       }
-      record.button.setAttribute("aria-label", label);
-      record.button.setAttribute("aria-description", description);
+      i18n.attr(record.button, "aria-label", label);
+      i18n.attr(record.button, "aria-description", description);
       record.button.disabled = node.hasAttribute("disabled");
       if (record.button !== cursor) list.insertBefore(record.button, cursor);
       cursor = record.button.nextSibling;
@@ -242,7 +245,7 @@ export default function enumPicker({
     );
     proxy.required = source.hasAttribute("required");
     proxy.setCustomValidity(
-      proxy.value && !selected ? "Choose an available option." : "",
+      proxy.value && !selected ? i18n.t("Choose an available option.") : "",
     );
     trigger.setAttribute(
       "aria-invalid",
@@ -271,7 +274,13 @@ export default function enumPicker({
           ),
         );
       } else
-        current.textContent = source.getAttribute("placeholder") || "Choose…";
+        current.append(
+          make(
+            "span",
+            "enum-placeholder",
+            source.getAttribute("placeholder") || "Choose…",
+          ),
+        );
       selectedSignature = signature;
     }
     if (!ordered.includes(active) || active?.button.disabled)

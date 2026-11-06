@@ -6,6 +6,11 @@ const expect = (value) => ({
   toBeNull: () => assert.equal(value, null),
 });
 import {
+  distributeItems,
+  positions,
+  responsivePositions,
+  availablePositions,
+  closestAllowedPosition,
   transition,
   gesture,
   nearestCorner,
@@ -23,6 +28,7 @@ test("navigation goes back one level and corner changes preserve navigation", ()
   state = transition(state, { type: "corner", corner: "top-left" });
   expect(state).toEqual({
     corner: "top-left",
+    preferredPosition: "top-left",
     path: ["root", "settings"],
   });
   expect(transition(state, { type: "back" }).path).toEqual(["root"]);
@@ -31,9 +37,9 @@ test("navigation goes back one level and corner changes preserve navigation", ()
 });
 test("gestures work inward from each corner and reject taps", () => {
   for (const sign of [-1, 1]) {
-    expect(gesture(sign * 80, 10)).toBe("quick");
+    expect(gesture(sign * 80, 10)).toBe("all");
     expect(gesture(10, sign * 80)).toBe("settings");
-    expect(gesture(sign * 80, 80)).toBe("full");
+    expect(gesture(sign * 80, 80)).toBe("all");
   }
   expect(gesture(8, 9)).toBeNull();
   expect(nearestCorner(10, 20, 100, 100)).toBe("top-left");
@@ -151,4 +157,109 @@ test("corner constraints are authoritative and snapping chooses only legal desti
   });
   expect(state.allowedCorners).toEqual([]);
   expect(state.corner).toBe("bottom-left");
+});
+
+test("root allocation ranks priorities stably and reserves a reachable overflow slot", () => {
+  const entries = [
+    { id: "a", priority: 0, group: "Work" },
+    { id: "b", priority: 5, group: "Support" },
+    { id: "c", priority: 5 },
+    { id: "d", priority: -1 },
+  ];
+  const plan = distributeItems(entries, 3);
+  expect(plan.root.map((item) => item.id)).toEqual(["b", "c"]);
+  expect(plan.overflow.map((item) => item.id)).toEqual(["a", "d"]);
+  expect(plan.overflow[0].group).toBe("Work");
+  expect(entries.map((item) => item.id)).toEqual(["a", "b", "c", "d"]);
+  expect(distributeItems(entries, 4).overflow.length).toBe(0);
+  expect(distributeItems(entries, 1).root.length).toBe(0);
+  expect(distributeItems(entries, 1).overflow.length).toBe(4);
+});
+
+test("edge-center snapping and constraints cover all eight positions", () => {
+  expect(positions.length).toBe(8);
+  for (const [x, y, position] of [
+    [0, 0, "top-left"],
+    [100, 0, "top-right"],
+    [0, 100, "bottom-left"],
+    [100, 100, "bottom-right"],
+    [50, 0, "top-center"],
+    [100, 50, "right-center"],
+    [50, 100, "bottom-center"],
+    [0, 50, "left-center"],
+  ])
+    expect(closestAllowedPosition(x, y, 100, 100)).toBe(position);
+  expect(availablePositions("top-left left-center").length).toBe(6);
+  const state = transition(
+    { corner: "bottom-center", path: [] },
+    {
+      type: "configure-positions",
+      disabled: positions.filter((position) => position !== "top-center"),
+    },
+  );
+  expect(state.corner).toBe("top-center");
+  expect(state.allowedPositions).toEqual(["top-center"]);
+  expect(transition(state, { type: "corner", corner: "left-center" })).toBe(
+    state,
+  );
+});
+
+test("narrow touch portrait anchors defer edge centers and restore the preferred position", () => {
+  const portrait = responsivePositions({
+    width: 390,
+    height: 844,
+    touch: true,
+  });
+  expect(portrait.includes("top-center")).toBe(false);
+  expect(portrait.includes("bottom-center")).toBe(false);
+  expect(portrait.includes("right-center")).toBe(true);
+  expect(
+    responsivePositions({ width: 390, height: 844, touch: false }).length,
+  ).toBe(8);
+  const landscape = responsivePositions({
+    width: 844,
+    height: 390,
+    touch: true,
+  });
+  expect(landscape.length).toBe(8);
+  let state = transition(
+    { corner: "top-center", path: [] },
+    { type: "configure-positions", options: portrait },
+  );
+  expect(state.corner).toBe("top-left");
+  expect(state.preferredPosition).toBe("top-center");
+  state = transition(state, {
+    type: "configure-positions",
+    options: landscape,
+  });
+  expect(state.corner).toBe("top-center");
+  state = transition(state, { type: "configure-positions", options: portrait });
+  state = transition(state, { type: "corner", corner: "top-left" });
+  state = transition(state, {
+    type: "configure-positions",
+    options: landscape,
+  });
+  expect(state.corner).toBe("top-left");
+  expect(state.preferredPosition).toBe("top-left");
+});
+
+test("responsive options never override explicitly blocked positions", () => {
+  let state = transition(
+    { corner: "bottom-center", path: [] },
+    {
+      type: "configure-positions",
+      options: positions,
+      disabled: "bottom-center",
+    },
+  );
+  expect(state.corner === "bottom-center").toBe(false);
+  const previous = state;
+  state = transition(state, { type: "corner", corner: "bottom-center" });
+  expect(state).toBe(previous);
+  state = transition(state, {
+    type: "configure-positions",
+    options: positions,
+    disabled: "bottom-center",
+  });
+  expect(state.allowedPositions.includes("bottom-center")).toBe(false);
 });

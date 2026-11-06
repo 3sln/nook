@@ -21,6 +21,7 @@
     "check:package": "node scripts/check-package.mjs"
   },
   "dependencies": {
+    "@3sln/bab": "^0.2.0",
     "@3sln/ngin": "^0.0.5"
   },
   "devDependencies": {

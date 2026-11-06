@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Nook stress lab</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@3sln/bab": "/nook/demo/vendor/bab/index.js",
+        "@3sln/ngin/queries": "/ngin/src/queries.js",
+        "@3sln/ngin/providers": "/ngin/src/providers.js"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font:
+        14px/1.6 system-ui,
+        sans-serif;
+      background: light-dark(#f5f4f8, #18161e);
+      color: light-dark(#282438, #eee9f7);
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      overflow-wrap: anywhere;
+    }
+    main {
+      max-width: 720px;
+      margin: auto;
+    }
+    h1 {
+      font-size: 26px;
+      line-height: 1.2;
+    }
+    p {
+      max-width: 65ch;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-block: 24px;
+    }
+    button {
+      font: inherit;
+      color: inherit;
+      background: light-dark(#fff, #302a3b);
+      border: 1px solid light-dark(#d8d3e3, #5e526e);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    button:focus-visible {
+      outline: 3px solid #9471f2;
+      outline-offset: 3px;
+    }
+    output {
+      display: block;
+      margin-block: 16px;
+    }
+    code {
+      font-size: 12px;
+    }
+    .paper {
+      padding: 24px;
+      background: light-dark(#fff, #25202e);
+      border-radius: 16px;
+      min-height: 50vh;
+    }
+  </style>
+  <main>
+    <h1>Nook stress lab</h1>
+    <p>
+      Exercise long labels, unbroken identifiers, rich enum options, nested
+      menus, dense settings, and command lists. Resize or rotate the viewport,
+      change the anchor by dragging, and try keyboard navigation.
+    </p>
+    <nav aria-label="Stress scenarios">
+      <button data-scenario="mixed">Everything</button
+      ><button data-scenario="actions">80 actions</button
+      ><button data-scenario="settings">40 settings</button
+      ><button data-scenario="commands">35 commands</button
+      ><button data-scenario="root-setting">Long root setting</button
+      ><button data-scenario="feedback">Feedback</button
+      ><button id="type-size">Large text</button>
+    </nav>
+    <output id="status" aria-live="polite"></output>
+    <div class="paper">
+      <h2>A busy application underneath</h2>
+      <p>
+        This page intentionally gives the dock difficult content. The fixture is
+        demo code and is excluded from the published package.
+      </p>
+      <p>
+        Use More for grouped overflow. In settings, scroll to the last control,
+        open an enum, and navigate to its final option. In commands, filter the
+        list and complete the long-label argument form.
+      </p>
+    </div>
+  </main>
+  <nook-dock id="dock"></nook-dock>
+  <script type="module">
+    import "/nook/src/index.js";
+    import { populateStress } from "/nook/demo/stress.js";
+    import { createTabCaptureSession } from "/nook/src/capture.js";
+    const screenCapture = createTabCaptureSession();
+    const dock = document.querySelector("nook-dock");
+    function show(scenario) {
+      screenCapture.stop();
+      dock.feedback = false;
+      const counts = populateStress(dock, scenario, {
+        captureScreenshot: navigator.mediaDevices?.getDisplayMedia
+          ? (options) => screenCapture.capture(options)
+          : undefined,
+      });
+      document.querySelector("#status").textContent =
+        `${counts.actions} actions · ${counts.settings} settings · ${counts.commands} commands`;
+    }
+    for (const button of document.querySelectorAll("[data-scenario]"))
+      button.onclick = () => show(button.dataset.scenario);
+    let large = false;
+    document.querySelector("#type-size").onclick = (event) => {
+      large = !large;
+      for (const [key, value] of Object.entries({
+        xs: large ? 16 : 12,
+        sm: large ? 18 : 13,
+        md: large ? 20 : 14,
+        lg: large ? 24 : 16,
+      }))
+        dock.style.setProperty(`--nook-text-${key}`, `${value}px`);
+      event.target.textContent = large ? "Normal text" : "Large text";
+    };
+    dock.addEventListener(
+      "nook-action",
+      (event) =>
+        (document.querySelector("#status").textContent =
+          `Selected ${event.detail.id || event.detail.source.getAttribute("label")}`),
+    );
+    show(new URL(location.href).searchParams.get("scenario") || "mixed");
+  </script>
+</html>

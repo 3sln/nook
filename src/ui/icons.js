@@ -20,6 +20,8 @@ const paths = {
   plus: '<path d="M12 4v16M4 12h16"/>',
   people:
     '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m1-15a3 3 0 0 1 0 6m3 9v-2a6 6 0 0 0-2-4"/>',
+  image:
+    '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 3-3 6 6"/>',
   file: '<path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8m-8 4h5"/>',
   code: '<path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/>',
   archive: '<path d="M4 8h16v13H4zM3 3h18v5H3zm6 9h6"/>',

@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { captureTabScreenshot } from "../src/capture.js";
+import {
+  captureTabScreenshot,
+  createTabCaptureSession,
+} from "../src/capture.js";
 function harness({ defer = false } = {}) {
   let stopped = 0,
     drawn = 0,
@@ -71,4 +74,27 @@ test("capture cancellation rejects pending frames and releases tracks", async ()
   await assert.rejects(pending, { name: "AbortError" });
   assert.ok(h.stopped >= 1);
   assert.equal(h.video.srcObject, null);
+});
+
+test("capture session reuses the sharing stream and releases it on Done", async () => {
+  const h = harness();
+  let prompts = 0;
+  const get = h.window.navigator.mediaDevices.getDisplayMedia;
+  h.window.navigator.mediaDevices.getDisplayMedia = () => {
+    prompts++;
+    return get();
+  };
+  const session = createTabCaptureSession({ window: h.window });
+  const lifetime = new AbortController();
+  const a = await session.capture({ signal: lifetime.signal });
+  const b = await session.capture({ signal: lifetime.signal });
+  assert.equal(prompts, 1);
+  assert.equal(h.drawn, 2);
+  assert.equal(h.stopped, 0);
+  assert.equal(a.name, "app-screenshot-1.png");
+  assert.equal(b.name, "app-screenshot-2.png");
+  lifetime.abort();
+  assert.equal(h.stopped, 1);
+  session.stop();
+  assert.equal(h.stopped, 1);
 });

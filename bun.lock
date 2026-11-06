@@ -5,6 +5,7 @@
     "": {
       "name": "@3sln/nook",
       "dependencies": {
+        "@3sln/bab": "^0.2.0",
         "@3sln/ngin": "^0.0.5",
       },
       "devDependencies": {
@@ -14,6 +15,8 @@
     },
   },
   "packages": {
+    "@3sln/bab": ["@3sln/bab@0.2.0", "", {}, "sha512-/uzeiRn2Neo8UMzMUJTrPfj7vFWnoYHFELnezMQrWZb8EAfW7+EM8ZZ7Sq9EqD7YjVwjYVc/IlkNkIXLxu3U9w=="],
+
     "@3sln/ngin": ["@3sln/ngin@0.0.5", "", {}, "sha512-+DztuCyhZpkEqHdEZOg5xXCVLYV2L3xgKlpngJDPpGGHe90si6ZzubEDad2+0ggVB+d2FTTa2Rb+GOqSA6QSKQ=="],
 
     "@playwright/test": ["@playwright/test@1.64.1", "", { "dependencies": { "playwright": "1.64.1" }, "bin": { "playwright": "cli.js" } }, "sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg=="],

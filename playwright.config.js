@@ -2,7 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 const baseURL = `http://127.0.0.1:${process.env.PORT || 4178}`;
 export default defineConfig({
   testDir: "./test/browser",
-  use: { baseURL },
+  reporter: [["list"], ["html", { open: "never" }]],
+  use: { baseURL, screenshot: "only-on-failure", trace: "retain-on-failure" },
   webServer: {
     command: "bun demo/server.js",
     url: baseURL,

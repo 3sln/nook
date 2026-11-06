@@ -1,6 +1,7 @@
 import { resolve, sep } from "node:path";
 const root = resolve(import.meta.dir, "..");
 const routes = [
+  ["/ngin/src/", resolve(root, "node_modules/@3sln/ngin/src")],
   ["/nook/demo/", resolve(root, "demo")],
   ["/nook/src/", resolve(root, "src")],
   [

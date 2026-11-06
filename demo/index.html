@@ -3,104 +3,108 @@
   <meta charset="utf-8" /><meta
     name="viewport"
     content="width=device-width,initial-scale=1"
-  /><title>Nook — a little space for the extras</title>
+  /><title>Nook — development demo</title>
   <script type="importmap">
     {
       "imports": {
-        "@3sln/ngin/queries": "/nook/node_modules/@3sln/ngin/src/queries.js",
-        "@3sln/ngin/providers": "/nook/node_modules/@3sln/ngin/src/providers.js"
+        "@3sln/bab": "/nook/demo/vendor/bab/index.js",
+        "@3sln/ngin/queries": "/ngin/src/queries.js",
+        "@3sln/ngin/providers": "/ngin/src/providers.js"
       }
     }
   </script>
   <style>
     :root {
-      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-family: ui-sans-serif, system-ui, sans-serif;
       color-scheme: light dark;
-      color: light-dark(#302b43, #eee8fa);
-      background: light-dark(#f8f7fb, #1c1924);
+      --page: light-dark(#f5f5f8, #19181e);
+      --surface: light-dark(#ffffff, #232229);
+      --subtle: light-dark(#eeeef4, #2c2b35);
+      --ink: light-dark(#292735, #efedf5);
+      --muted: light-dark(#666373, #b1acbf);
+      --border: light-dark(#dedce6, #3d3948);
+      --accent: light-dark(#6750b5, #c0afff);
+      color: var(--ink);
+      background: var(--page);
       font-synthesis: none;
     }
     * {
       box-sizing: border-box;
     }
+    nook-dock:not(:defined) {
+      display: none;
+    }
     body {
       margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    button,
+    textarea {
+      font: inherit;
+    }
+    button,
+    a,
+    textarea {
+      -webkit-tap-highlight-color: transparent;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
     }
     nav {
-      height: 96px;
-      max-width: 1200px;
+      max-width: 1040px;
       margin: auto;
+      padding: 20px 32px;
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      justify-content: space-between;
-      padding: 0 40px;
+      gap: 12px 24px;
+      border-bottom: 1px solid var(--border);
     }
     .brand {
-      font-size: 24px;
-      letter-spacing: -1px;
-      font-weight: 750;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: -0.5px;
     }
-    .brand span {
-      color: #7963e4;
-    }
-    nav a {
+    .demo-label {
+      color: var(--muted);
       font-size: 12px;
-      color: #726c85;
-      text-decoration: none;
-      margin-left: 24px;
     }
-    .pill {
-      border: 1px solid #e1ddeb;
-      border-radius: 30px;
-      padding: 8px 14px;
-      font-size: 11px;
-      letter-spacing: 0.4px;
-      color: #75638e;
+    .links {
+      margin-inline-start: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    a {
+      color: var(--accent);
+      text-underline-offset: 3px;
+      font-size: 12px;
     }
     main {
-      max-width: 1120px;
-      margin: 40px auto 0;
-      padding: 0 40px;
-    }
-    .eyebrow {
-      font-size: 10px;
-      letter-spacing: 2.5px;
-      color: #8a7ba8;
-      font-weight: 600;
+      max-width: 1040px;
+      margin: 32px auto;
+      padding: 0 32px 96px;
     }
     h1 {
-      font-size: clamp(40px, 6vw, 72px);
-      line-height: 1.07;
-      letter-spacing: -3.5px;
-      font-weight: 550;
-      max-width: 750px;
-      margin: 22px 0;
+      font-size: 26px;
+      line-height: 1.2;
+      letter-spacing: -0.6px;
+      margin: 0 0 8px;
+      font-weight: 600;
     }
-    h1 em {
-      font-style: normal;
-      color: #8972d7;
-    }
-    .intro {
-      font-size: 16px;
-      line-height: 1.8;
-      color: #898298;
-      max-width: 480px;
+    .intro,
+    .hint {
+      color: var(--muted);
+      margin: 0;
+      max-width: 65ch;
     }
     .hint {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin: 24px 0 40px;
-      font-size: 11px;
-      color: #878092;
-    }
-    kbd {
-      border: 1px solid #ddd8e7;
-      background: white;
-      padding: 6px 9px;
-      border-radius: 6px;
-      font-family: inherit;
-      color: #756a87;
+      font-size: 12px;
+      margin: 8px 0 24px;
     }
     .touch-hint {
       display: none;
@@ -113,208 +117,267 @@
         display: inline;
       }
     }
-    .workspace {
-      border: 1px solid #e6e1ed;
-      border-radius: 14px;
-      background: white;
-      box-shadow: 0 12px 55px #5d467608;
-      overflow: hidden;
+    .playground {
       display: grid;
-      grid-template-columns: 190px 1fr;
-      min-height: 310px;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 310px);
+      gap: 20px;
+      align-items: start;
     }
-    .sidebar {
+    .workspace,
+    .demo-controls {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .document,
+    .demo-controls {
       padding: 24px;
-      border-right: 1px solid #f0edf4;
-      font-size: 12px;
-      color: #a49bad;
-    }
-    .sidebar strong {
-      display: block;
-      color: #51465e;
-      margin-bottom: 24px;
-    }
-    .sidebar p {
-      padding: 9px 12px;
-    }
-    .sidebar .selected {
-      background: #f2eefb;
-      color: #8970c7;
-      border-radius: 8px;
-    }
-    .document {
-      padding: 32px 40px;
     }
     .doc-top {
       display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
       justify-content: space-between;
-      font-size: 10px;
-      color: #aea4bb;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    h2 {
+      font-size: 17px;
+      line-height: 1.4;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      margin: 0 0 12px;
+      overflow-wrap: anywhere;
     }
     .document h2 {
-      font-size: 25px;
-      font-weight: 550;
-      letter-spacing: -0.8px;
-      margin: 28px 0 10px;
+      font-size: 23px;
+      margin-top: 28px;
     }
-    .document p {
+    .document p,
+    .demo-controls p {
+      color: var(--muted);
+      margin: 0 0 20px;
+      overflow-wrap: anywhere;
+    }
+    .editor-label {
+      display: block;
+      margin-bottom: 8px;
       font-size: 12px;
-      line-height: 1.9;
-      color: #a197ac;
-      max-width: 450px;
+      font-weight: 600;
     }
-    .line {
-      height: 7px;
-      background: #f2eff6;
+    .editor {
+      display: block;
+      width: 100%;
+      min-height: 200px;
+      max-height: 60dvh;
+      resize: vertical;
+      border: 1px solid var(--border);
       border-radius: 10px;
-      margin: 13px 0;
-      max-width: 450px;
+      padding: 14px;
+      background: var(--page);
+      color: var(--ink);
+      line-height: 1.7;
     }
-    .line.short {
-      max-width: 300px;
+    .editor::placeholder {
+      color: var(--muted);
+      opacity: 1;
     }
-    .demo-tools {
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      align-items: center;
-      font-size: 11px;
-      color: #9b91a7;
-      padding: 22px 0;
+    .demo-controls p {
+      font-size: 13px;
     }
-    .demo-tools button {
-      background: white;
-      border: 1px solid #ded7e9;
-      color: #7a6b92;
-      border-radius: 8px;
-      padding: 9px 12px;
-      font: inherit;
+    .demo-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .demo-controls button {
+      min-width: 0;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+      color: var(--ink);
       cursor: pointer;
+      text-align: start;
+      font-size: 12px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
     }
-    .corner-note {
-      position: fixed;
-      bottom: 26px;
-      right: 80px;
-      color: #92839f;
-      font-size: 11px;
+    .demo-controls button:hover {
+      background: var(--subtle);
     }
-    .corner-note span {
-      font-size: 20px;
-      margin-left: 10px;
+    #dynamic {
+      width: 100%;
+      margin-top: 16px;
+    }
+    .demo-status {
+      border-top: 1px solid var(--border);
+      margin-top: 20px;
+      padding-top: 16px;
+    }
+    .demo-status p {
+      margin: 0;
+      font-size: 12px;
+    }
+    #demo-status {
+      margin-top: 8px;
+      min-height: 3em;
+    }
+    .app-settings {
+      margin-top: 20px;
+      padding: 24px;
+    }
+    .app-settings[hidden] {
+      display: none;
+    }
+    .app-settings p {
+      color: var(--muted);
+      margin: 0 0 16px;
+    }
+    .app-settings label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 44px;
+      margin-bottom: 16px;
+    }
+    .app-settings input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--accent);
     }
     footer {
-      font-size: 10px;
-      letter-spacing: 0.5px;
-      color: #b1a6bc;
-      margin: 40px 0;
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
     }
-    body.dark {
-      background: #1c1924;
-      color: #eee8fa;
-    }
-    .dark .workspace,
-    .dark kbd,
-    .dark .demo-tools button {
-      background: #282330;
-      color: #d5c9e5;
-      border-color: #3c3448;
-    }
-    .dark .sidebar {
-      border-color: #3c3448;
-    }
-    .dark .line {
-      background: #3c3448;
-    }
-    @media (max-width: 650px) {
+    @media (max-width: 720px) {
       nav {
-        padding: 0 24px;
-        height: 75px;
-      }
-      nav a {
-        display: none;
+        padding: 16px 20px;
       }
       main {
-        margin-top: 35px;
-        padding: 0 24px;
+        margin-top: 24px;
+        padding-inline: 20px;
       }
-      h1 {
-        letter-spacing: -2px;
+      .playground {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
       }
-      .sidebar {
-        display: none;
+      .document,
+      .demo-controls {
+        padding: 20px;
       }
-      .workspace {
-        grid-template-columns: 1fr;
+      .editor {
+        min-height: 140px;
       }
-      .document {
-        padding: 24px;
+    }
+    @media (max-width: 360px) {
+      nav {
+        gap: 8px 12px;
+        padding-inline: 16px;
       }
-      .hint {
-        margin-bottom: 30px;
+      .links {
+        width: 100%;
+        margin-inline-start: 0;
       }
-      .demo-tools {
-        align-items: start;
+      main {
+        padding-inline: 16px;
       }
-      .corner-note {
-        display: none;
+      .document,
+      .demo-controls {
+        padding: 16px;
       }
     }
   </style>
-  <nav>
-    <div class="brand">nook</div>
-    <div>
-      <a href="https://github.com/3sln/stack">Built the 3sln way</a
-      ><span class="pill">WEB COMPONENTS · 0.1</span>
+  <nav aria-label="Demo links">
+    <span class="brand">nook</span
+    ><span class="demo-label">Development demo</span>
+    <div class="links">
+      <a href="/nook/demo/stress.html">Stress cases</a
+      ><a href="https://github.com/3sln/nook">Source</a>
     </div>
   </nav>
   <main>
-    <div class="eyebrow">A QUIETER KIND OF INTERFACE</div>
-    <h1>Everything extra.<br /><em>Right in your corner.</em></h1>
+    <h1>Playground</h1>
     <p class="intro">
-      Give the useful little things a place of their own.<br />Always within
-      reach. Never in the way.
+      Test menus, settings, commands, and feedback over a sample app.
     </p>
-    <div class="hint">
+    <p class="hint">
       <span class="keyboard-hint"
-        ><kbd>Shift</kbd> + <kbd>?</kbd> to open Nook</span
+        >Click Nook in the corner to open it. Hold to move; hover for
+        shortcuts.</span
+      ><span class="touch-hint"
+        >Tap Nook in the corner to open it. Hold to move, or swipe to choose a
+        menu.</span
       >
-      <span class="touch-hint">Tap the corner to open. Hold to move.</span>
-    </div>
-    <section class="workspace">
-      <aside class="sidebar">
-        <strong>◈ &nbsp; Studio notes</strong>
-        <p class="selected">Overview</p>
-        <p>Working notes</p>
-        <p>Resources</p>
-      </aside>
-      <article class="document">
-        <div class="doc-top">
-          <span>WORKSPACE &nbsp; / &nbsp; OVERVIEW</span
-          ><span>All changes saved &nbsp; ◦</span>
+    </p>
+    <div class="playground">
+      <section class="workspace" aria-label="Sample app">
+        <article class="document">
+          <div class="doc-top">
+            <span>Sample workspace</span><span>Local only</span>
+          </div>
+          <h2>Project notes</h2>
+          <p>
+            A scratchpad for trying commands, switching views, and taking
+            feedback snapshots.
+          </p>
+          <label class="editor-label" for="scratchpad">Notes</label>
+          <textarea
+            class="editor"
+            id="scratchpad"
+            placeholder="Write something, open a menu, then come back…"
+            spellcheck="false"
+          ></textarea>
+        </article>
+      </section>
+      <aside class="demo-controls" aria-label="Demo controls">
+        <h2>Try a view</h2>
+        <div class="demo-buttons">
+          <button data-view="all">Open all actions</button>
+          <button data-view="settings">Open settings</button>
+          <button data-view="commands">Open commands</button>
+          <button data-view="feedback">Open feedback</button>
         </div>
-        <h2>A little room to think.</h2>
-        <p>
-          This is your app. Your content, your flow, your space.<br />Nook keeps
-          the supporting cast quietly close by.
+        <button id="dynamic" aria-pressed="false">Add contextual action</button>
+        <p style="margin-top: 12px">
+          Add or remove an action while a menu is open. Resources contains
+          nested menus; Export has a longer list.
         </p>
-        <div class="line"></div>
-        <div class="line"></div>
-        <div class="line short"></div>
-      </article>
-    </section>
-    <div class="demo-tools">
-      <span
-        >Explore Resources → Guides or Export.<br />Try adding an item while the
-        menu is open.</span
-      ><button id="dynamic">＋ Add contextual action</button>
+        <div class="demo-status">
+          <p id="anchor-status"></p>
+          <p id="demo-status" role="status">
+            Sample actions report here. Feedback stays in memory; nothing is
+            sent.
+          </p>
+        </div>
+      </aside>
     </div>
+    <section
+      id="app-settings"
+      class="workspace app-settings"
+      aria-labelledby="app-settings-heading"
+      hidden
+    >
+      <h2 id="app-settings-heading" tabindex="-1">App settings</h2>
+      <p>
+        This is an app-owned destination. Its theme toggle stays in sync with
+        Quick settings.
+      </p>
+      <label><input type="checkbox" id="app-dark" />Dark mode</label>
+      <a href="#scratchpad">Back to playground</a>
+    </section>
     <footer>
-      SMALL SURFACE. OPEN POSSIBILITIES. &nbsp; / &nbsp; @3SLN/NOOK
+      For dense lists, long labels, and narrow layouts, open
+      <a href="/nook/demo/stress.html">Stress cases</a>.
     </footer>
   </main>
-  <div class="corner-note">Your extras live here <span>↘</span></div>
-  <nook-dock id="dock">
-    <nook-menu root label="Resources">
+  <nook-dock id="dock" settings-href="#app-settings">
+    <nook-menu priority="25" group="Help" label="Resources">
       <template slot="icon"
         ><svg
           viewBox="0 0 24 24"
@@ -576,8 +639,8 @@
         ></template>
         <template slot="content">
           <p>
-            A small corner for the useful extras. Reusable custom elements,
-            persistent views, and context supplied by your app.
+            This demo uses custom elements with live DOM updates and persistent
+            views.
           </p>
           <p>
             Guides shows compact nested menus. Export has six sample actions so
@@ -587,7 +650,13 @@
         </template>
       </nook-panel>
     </nook-menu>
-    <nook-action id="copy" label="Copy link" keybind="Alt+C">
+    <nook-action
+      id="copy"
+      label="Copy link"
+      keybind="Alt+C"
+      priority="5"
+      group="Sharing"
+    >
       <template slot="icon"
         ><svg
           viewBox="0 0 24 24"
@@ -601,6 +670,84 @@
           <use href="#nook-icon-link"></use></svg
       ></template>
     </nook-action>
+    <nook-action
+      id="duplicate-note"
+      label="Duplicate note"
+      priority="4"
+      group="Workspace"
+    >
+      <template slot="icon"
+        ><svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+        >
+          <use href="#nook-icon-file"></use></svg
+      ></template>
+    </nook-action>
+    <nook-action
+      id="archive-note"
+      label="Archive note"
+      priority="3"
+      group="Workspace"
+    >
+      <template slot="icon"
+        ><svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+        >
+          <use href="#nook-icon-archive"></use></svg
+      ></template>
+    </nook-action>
+    <nook-panel
+      id="keyboard-guide"
+      label="How Nook works"
+      priority="2"
+      group="Help"
+    >
+      <template slot="icon"
+        ><svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+        >
+          <use href="#nook-icon-guide"></use></svg
+      ></template>
+      <template slot="content">
+        <style>
+          .touch-guide {
+            display: none;
+          }
+          @media (pointer: coarse), (hover: none) {
+            .desktop-guide {
+              display: none;
+            }
+            .touch-guide {
+              display: block;
+            }
+          }
+        </style>
+        <p>This guide is defined by the demo, just like any app-owned panel.</p>
+        <div class="desktop-guide">
+          <p>
+            Use arrow keys to move, Enter or Space to choose, and hold
+            Alt/Option for numbered labels.
+          </p>
+          <p>Escape closes. Backspace goes back.</p>
+        </div>
+        <div class="touch-guide">
+          <p>
+            Tap to open. Swipe sideways or diagonally for all actions, or up or
+            down for settings.
+          </p>
+        </div>
+        <p>Hold, then drag the corner to move it.</p>
+      </template>
+    </nook-panel>
     <nook-command
       id="new-note"
       name="Create a note"
@@ -645,7 +792,7 @@
     <nook-setting
       id="theme"
       label="Dark mode"
-      description="A softer space after hours"
+      description="Use the dark color scheme"
       type="toggle"
       value="false"
     ></nook-setting>
@@ -658,10 +805,7 @@
       id="size"
     ></nook-setting>
     <nook-setting label="Accent" type="enum" value="#7560e8" id="accent">
-      <nook-option
-        value="#7560e8"
-        label="Iris"
-        description="Soft violet, Nook's original accent"
+      <nook-option value="#7560e8" label="Iris" description="Violet"
         ><template slot="icon"
           ><span
             style="
@@ -673,10 +817,7 @@
             "
           ></span></template
       ></nook-option>
-      <nook-option
-        value="#36877d"
-        label="Sage"
-        description="Quiet green for a calmer workspace"
+      <nook-option value="#36877d" label="Sage" description="Green"
         ><template slot="icon"
           ><span
             style="
@@ -688,10 +829,7 @@
             "
           ></span></template
       ></nook-option>
-      <nook-option
-        value="#bc6a54"
-        label="Clay"
-        description="Warm terracotta with a little character"
+      <nook-option value="#bc6a54" label="Clay" description="Terracotta"
         ><template slot="icon"
           ><span
             style="
@@ -707,27 +845,34 @@
   </nook-dock>
   <script type="module">
     import "/nook/src/index.js";
-    import { captureTabScreenshot } from "/nook/src/capture.js";
+    import { createTabCaptureSession } from "/nook/src/capture.js";
+    const screenCapture = createTabCaptureSession();
     const dock = document.querySelector("#dock");
     dock.context = { page: location.href, workspace: "Studio notes" };
     dock.feedback = {
       submit: async (report) => {
         dock.lastFeedback = report;
+        document.querySelector("#demo-status").textContent =
+          "Feedback saved in memory.";
       },
       attachFiles: async (files) => files,
       captureScreenshot: navigator.mediaDevices?.getDisplayMedia
-        ? (options) => captureTabScreenshot(options)
+        ? (options) => screenCapture.capture(options)
         : undefined,
       successMessage: "Saved in this demo only. No data was sent.",
     };
     const scheme = matchMedia("(prefers-color-scheme: dark)");
     let chosenTheme = false;
     function applyTheme(dark) {
-      document.body.classList.toggle("dark", dark);
       document.documentElement.style.colorScheme = dark ? "dark" : "light";
       dock.style.colorScheme = dark ? "dark" : "light";
       dock.querySelector("#theme").value = dark;
+      document.querySelector("#app-dark").checked = dark;
     }
+    document.querySelector("#app-dark").onchange = (event) => {
+      chosenTheme = true;
+      applyTheme(event.currentTarget.checked);
+    };
     applyTheme(scheme.matches);
     scheme.addEventListener("change", (event) => {
       if (!chosenTheme) applyTheme(event.matches);
@@ -739,7 +884,7 @@
         applyTheme(value);
       }
       if (source.id === "size")
-        dock.style.setProperty("--nook-font", `${value}px system-ui`);
+        dock.style.setProperty("--nook-text-md", `${value}px`);
       if (source.id === "accent")
         dock.style.setProperty("--nook-accent", value);
     });
@@ -792,18 +937,48 @@
         );
       }
     });
+    for (const button of document.querySelectorAll("[data-view]"))
+      button.onclick = () => dock.open(button.dataset.view);
+    const status = document.querySelector("#demo-status");
+    dock.addEventListener("nook-action", (event) => {
+      status.textContent = `${event.detail.source.getAttribute("label")} selected.`;
+    });
+    dock.addEventListener("nook-command", (event) => {
+      status.textContent = `${event.detail.source?.getAttribute("name") || event.detail.id} executed.`;
+    });
+    const anchorStatus = document.querySelector("#anchor-status");
+    const updateAnchor = () =>
+      (anchorStatus.textContent = `Anchor: ${dock.position.replaceAll("-", " ")}`);
+    dock.addEventListener("nook-position-change", updateAnchor);
+    updateAnchor();
+    const showAppSettings = () => {
+      const section = document.querySelector("#app-settings");
+      const active = location.hash === "#app-settings";
+      section.hidden = !active;
+      if (active) {
+        dock.close();
+        document.querySelector("#app-settings-heading").focus();
+        section.scrollIntoView({ block: "start" });
+      }
+    };
+    window.addEventListener("hashchange", showAppSettings);
+    showAppSettings();
     let extra;
     document.querySelector("#dynamic").onclick = (e) => {
       if (extra) {
         extra.remove();
         extra = null;
-        e.target.textContent = "＋ Add contextual action";
+        e.currentTarget.textContent = "Add contextual action";
+        e.currentTarget.setAttribute("aria-pressed", "false");
       } else {
         extra = document.createElement("nook-action");
         extra.setAttribute("label", "Save page");
         extra.setAttribute("keybind", "Alt+S");
+        extra.priority = 15;
+        extra.group = "Workspace";
         dock.append(extra);
-        e.target.textContent = "− Remove contextual action";
+        e.currentTarget.textContent = "Remove contextual action";
+        e.currentTarget.setAttribute("aria-pressed", "true");
       }
     };
   </script>
