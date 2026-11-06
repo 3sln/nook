@@ -411,7 +411,7 @@ test("panel backdrops match the dial in light and dark schemes", async ({
         };
       }, isMobile);
     const expected = await material(dial(page));
-    expect(expected.blur).toBe("blur(3px)");
+    expect(expected.blur).toBe("blur(12px)");
     for (const view of ["all", "settings", "commands", "feedback"]) {
       await page
         .locator("nook-dock")

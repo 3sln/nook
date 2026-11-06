@@ -583,7 +583,7 @@ test("adaptive defaults, rounded compact backdrop, and locked-corner affordances
   await page.getByRole("button", { name: "Open Nook menu" }).click();
   const root = page.getByRole("dialog", { name: "Nook", exact: true });
   if (fullMaterial) {
-    expect(fullMaterial.filter).toContain("blur(3px)");
+    expect(fullMaterial.filter).toContain("blur(12px)");
   }
   expect(
     await root.evaluate((node) => getComputedStyle(node, "::before").maskImage),
@@ -592,7 +592,7 @@ test("adaptive defaults, rounded compact backdrop, and locked-corner affordances
     await root.evaluate(
       (node) => getComputedStyle(node, "::before").backdropFilter,
     ),
-  ).toContain("blur(3px)");
+  ).toContain("blur(12px)");
   const choice = root.getByRole("button", { name: "Feedback", exact: true });
   expect(
     await choice.evaluate((node) => getComputedStyle(node).backgroundColor),
